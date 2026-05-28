@@ -1,0 +1,60 @@
+{% extends "authorized/layout.html" %}
+{% block body %}
+  <style>
+.register_body {
+  max-width: 600px;
+}
+  </style>
+  <div class="container mt-5 register_body">
+    <!-- กรอบรอบคำว่า Register -->
+    <div class="alert alert-primary text-center">
+      <h1 class="mb-0">Register</h1>
+    </div>
+    <!-- แสดงข้อความผิดพลาด (ถ้ามี) -->
+    {% if message %}<div class="alert alert-danger text-center">{{ message }}</div>{% endif %}
+    <!-- กล่องลงทะเบียน -->
+    <div class="card shadow-sm">
+      <div class="card-body">
+        <form action="{% url 'register' %}" method="post">
+          {% csrf_token %}
+          <div class="form-group mb-3">
+            <label for="Username">Username</label>
+            <input type="text"
+                   name="Username"
+                   class="form-control"
+                   placeholder="Enter username"
+                   required>
+          </div>
+          <div class="form-group mb-3">
+            <label for="email">Email</label>
+            <input type="email"
+                   name="email"
+                   class="form-control"
+                   placeholder="Enter email"
+                   required>
+          </div>
+          <div class="form-group mb-3">
+            <label for="Password">Password</label>
+            <input type="password"
+                   name="Password"
+                   class="form-control"
+                   placeholder="Enter password"
+                   required>
+          </div>
+          <div class="form-group mb-4">
+            <label for="confirm_password">Confirm Password</label>
+            <input type="password"
+                   name="confirm_password"
+                   class="form-control"
+                   placeholder="Confirm password"
+                   required>
+          </div>
+          <button type="submit" class="btn btn-success btn-block">Register</button>
+        </form>
+      </div>
+    </div>
+    <div class="text-center mt-3">
+      Already have an account? <a href="{% url 'login' %}">Login here</a>
+    </div>
+  </div>
+{% endblock body %}

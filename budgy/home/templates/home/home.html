@@ -1,0 +1,93 @@
+{% extends "home/layout.html" %}
+{% block title %}
+  Home
+{% endblock title %}
+{% block body %}
+  <!-- Content -->
+  <div class="app-container">
+    <!-- side bar -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <div class="profile-icon"></div>
+      </div>
+      <nav class="sidebar-nav">
+        <ul>
+          <li class="active">
+            <a href="{% url 'home' request.user.id %}">HOME</a>
+          </li>
+          <li>
+            <a href="{% url 'dashboard' request.user.id %}">Dashboard</a>
+          </li>
+          <li>
+            <a href="{% url 'transaction_income' request.user.id %}">Transaction</a>
+          </li>
+          <li>
+            <a href="{% url 'account_management' request.user.id %}">Accounts</a>
+          </li>
+          <li>
+            <a href="{% url 'stats' request.user.id %}">Stats</a>
+          </li>
+          <li>
+            <a href="{% url 'settings' request.user.id %}">Settings</a>
+          </li>
+        </ul>
+      </nav>
+      <div class="sidebar-footer">
+        <div class="logout-icon"></div>
+      </div>
+    </aside>
+    
+    <!-- Main Content with Financial Summary -->
+    <main class="main-content">
+      <div class="form-container">
+        <div class="d-flex flex-column align-items-center justify-content-center text-center"
+             style="height:80vh">
+          
+          <h1 class="mb-4">Welcome back, {{ request.user.username }}! 👋</h1>
+
+          <!-- THE CHANGE IS ON THIS LINE: Added an inline style to increase the max-width -->
+          <div class="balance-box" style="max-width: 550px;">
+              <h2 class="mb-3">This Month's Summary</h2>
+
+              {% if month_income > 0 %}
+                <p class="fs-5">
+                    You have spent <strong>{{ month_expense|floatformat:2 }}฿</strong> so far this month.
+                    <br>
+                    That's <strong>{{ expense_percentage|floatformat:1 }}%</strong> of your total income for the month.
+                </p>
+              {% elif month_expense > 0 %}
+                <p class="fs-5">
+                    Your expense this month is <strong>{{ month_expense|floatformat:2 }}฿</strong>, with no recorded income yet.
+                </p>
+              {% else %}
+                <p class="fs-5">
+                    Great! No expenses have been recorded this month yet.
+                </p>
+              {% endif %}
+              
+              <hr>
+
+              <h4 class="mt-3">Total Remaining Balance:</h4>
+              <h2 class="text-success"><strong>{{ total_balance|floatformat:2 }}฿</strong></h2>
+          </div>
+
+        </div>
+      </div>
+    </main>
+  </div>
+  
+  <!-- Contact and other -->
+  <footer class="footer">
+    <div class="footer-social">
+      <span><a href="{% url 'contact' %}">Contact Us</span>
+      <a href="#"><i class="fab fa-facebook-f"></i></a>
+      <a href="#"><i class="fab fa-line"></i></a>
+      <a href="#"><i class="fab fa-instagram"></i></a>
+      <a href="#"><i class="far fa-envelope"></i></a>
+    </div>
+    <div class="footer-links">
+      <a href="#">Term of Use</a>
+      <a href="#">Privacy Policy</a>
+    </div>
+  </footer>
+{% endblock body %}```

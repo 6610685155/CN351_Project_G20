@@ -1,0 +1,26 @@
+<!-- หมวดหมู่ -->
+<div class="category-box">
+    <h3>Category</h3>
+    <form method="POST">
+        <input type="text"
+               id="newCategory"
+               name="category_name"
+               placeholder="Add category...">
+        <button type="submit">➕</button>
+        <input type="hidden" name="trans_type" value="income">
+    </form>
+    <div id="categoryList" class="category-list">
+        <!-- Categories will be displayed here -->
+        {% for category in categories %}
+            <form method="POST">
+                <input type="hidden"
+                       name="delete_category_name"
+                       value="{{ category.category_name }}">
+                <div class="category-item">
+                    {{ category.category_name }}
+                    <button type="submit" style="float: right;">✖</button>
+                </div>
+            </form>
+        {% endfor %}
+    </div>
+</div>

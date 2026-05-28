@@ -1,0 +1,240 @@
+{% extends "home/layout.html" %}
+{% block title %}Account Management{% endblock %}
+
+{% block body %}
+<div class="app-container">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+        <div class="sidebar-header">
+            <div class="profile-icon"></div>
+        </div>
+        <nav class="sidebar-nav">
+            <ul>
+                <li><a href="{% url 'home' request.user.id %}">HOME</a></li>
+                <li><a href="{% url 'dashboard' request.user.id %}">Dashboard</a></li>
+                <li><a href="{% url 'transaction_income' request.user.id %}">Transaction</a></li>
+                <li class="active"><a href="{% url 'account_management' request.user.id %}">Accounts</a></li>
+                <li><a href="{% url 'stats' request.user.id %}">Stats</a></li>
+                <li><a href="{% url 'settings' request.user.id %}">Settings</a></li>
+            </ul>
+        </nav>
+        <div class="sidebar-footer">
+            <div class="logout-icon"></div>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <div class="box">
+            <h3>Manage Accounts</h3>
+            <hr>
+            <!-- Add Account Form (Same as before) -->
+            <div class="mb-4">
+                <h4>Add New Account</h4>
+                <form method="POST" action="{% url 'account_management' user_id=request.user.id %}" class="row g-3">
+                    {% csrf_token %}
+                    <div class="col-md-5">
+                        <label for="account_name" class="form-label">Account Name</label>
+                        <input type="text" class="form-control" id="account_name" name="account_name" required>
+                    </div>
+                    <div class="col-md-4">
+                        <label for="balance" class="form-label">Initial Balance</label>
+                        <input type="number" step="0.01" class="form-control" id="balance" name="balance" value="0" required>
+                    </div>
+                    <div class="col-md-3 align-self-end">
+                        <button type="submit" class="btn btn-primary w-100">Add Account</button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- List of Existing Accounts -->
+            <h4>Existing Accounts</h4>
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th style="width: 50%;">Name</th>
+                        <th class="text-end">Balance</th>
+                        <th class="text-center">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="accounts-tbody">
+                    {% for account in accounts %}
+                    <tr data-account-id="{{ account.id }}">
+                        <td class="account-name-cell">{{ account.account_name }}</td>
+                        <td class="text-end">{{ account.balance|floatformat:2 }}฿</td>
+                        <td class="text-center account-actions-cell">
+                            {% if account.account_name != 'Cash' %}
+                                <button class="btn btn-sm btn-warning edit-btn">Edit</button>
+                                
+                                <!-- MODIFIED: Changed the delete button to trigger the modal -->
+                                <form method="POST" action="{% url 'delete_account' user_id=request.user.id account_id=account.id %}" style="display: inline;" class="delete-form">
+                                    {% csrf_token %}
+                                    <button type="button" class="btn btn-sm btn-danger delete-btn-trigger" data-bs-toggle="modal" data-bs-target="#deleteConfirmModal" data-account-name="{{ account.account_name }}">
+                                        Delete
+                                    </button>
+                                </form>
+                            {% else %}
+                                <span class="text-muted">Default</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </main>
+</div>
+
+<!-- Bootstrap Modal for Delete Confirmation -->
+<div class="modal fade" id="deleteConfirmModal" tabindex="-1" aria-labelledby="deleteModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="deleteModalLabel">Confirm Deletion</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        Are you sure you want to delete the account <strong id="accountNameToDelete"></strong>?
+        <p class="text-danger mt-2">This action cannot be undone.</p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-danger" id="confirmDeleteBtn">Yes, Delete</button>
+      </div>
+    </div>
+  </div>
+</div>
+<!-- End Modal -->
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const tableBody = document.getElementById('accounts-tbody');
+    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+    
+    // --- New variables for Delete Modal ---
+    const deleteModal = new bootstrap.Modal(document.getElementById('deleteConfirmModal'));
+    const confirmDeleteBtn = document.getElementById('confirmDeleteBtn');
+    const accountNameToDeleteSpan = document.getElementById('accountNameToDelete');
+    let formToSubmit = null; // Variable to hold the form that should be submitted
+
+    tableBody.addEventListener('click', function(e) {
+        // --- Handle EDIT button click (Same as before) ---
+        if (e.target.classList.contains('edit-btn')) {
+            const row = e.target.closest('tr');
+            // ... (rest of the edit logic)
+        }
+
+        // --- Handle CANCEL button click (Same as before) ---
+        if (e.target.classList.contains('cancel-btn')) {
+            const row = e.target.closest('tr');
+            // ... (rest of the cancel logic)
+        }
+
+        // --- Handle SAVE button click (Same as before) ---
+        if (e.target.classList.contains('save-btn')) {
+            const row = e.target.closest('tr');
+            // ... (rest of the save logic)
+        }
+
+        // --- NEW: Handle DELETE button click to OPEN MODAL ---
+        if (e.target.classList.contains('delete-btn-trigger')) {
+            const accountName = e.target.dataset.accountName;
+            formToSubmit = e.target.closest('form'); // Find the form associated with the clicked button
+            
+            // Set the account name in the modal body
+            accountNameToDeleteSpan.textContent = `"${accountName}"`;
+        }
+    });
+
+    // --- NEW: Handle the final confirmation click inside the modal ---
+    confirmDeleteBtn.addEventListener('click', function() {
+        if (formToSubmit) {
+            formToSubmit.submit(); // Submit the stored form
+        }
+    });
+
+    async function updateAccountName(id, newName, row) {
+        // ... (This entire function is the same as before)
+    }
+
+    // --- PASTE THE FULL EDIT/CANCEL/SAVE LOGIC HERE ---
+    // For brevity, I'm pasting the full click listener again.
+    // Please use this full version.
+    
+    tableBody.addEventListener('click', function(e) {
+        // --- Handle EDIT button click ---
+        if (e.target.classList.contains('edit-btn')) {
+            const row = e.target.closest('tr');
+            const nameCell = row.querySelector('.account-name-cell');
+            const actionsCell = row.querySelector('.account-actions-cell');
+            const currentName = nameCell.textContent.trim();
+
+            row.dataset.originalName = currentName;
+            row.dataset.originalActions = actionsCell.innerHTML;
+
+            nameCell.innerHTML = `<input type="text" class="form-control form-control-sm" value="${currentName}">`;
+            actionsCell.innerHTML = `
+                <button class="btn btn-sm btn-success save-btn">Save</button>
+                <button class="btn btn-sm btn-secondary cancel-btn">Cancel</button>
+            `;
+        }
+
+        // --- Handle CANCEL button click ---
+        if (e.target.classList.contains('cancel-btn')) {
+            const row = e.target.closest('tr');
+            const nameCell = row.querySelector('.account-name-cell');
+            const actionsCell = row.querySelector('.account-actions-cell');
+            
+            nameCell.textContent = row.dataset.originalName;
+            actionsCell.innerHTML = row.dataset.originalActions;
+        }
+
+        // --- Handle SAVE button click ---
+        if (e.target.classList.contains('save-btn')) {
+            const row = e.target.closest('tr');
+            const accountId = row.dataset.accountId;
+            const inputField = row.querySelector('input[type="text"]');
+            const newName = inputField.value.trim();
+
+            updateAccountName(accountId, newName, row);
+        }
+
+        // --- NEW: Handle DELETE button click to OPEN MODAL ---
+        if (e.target.classList.contains('delete-btn-trigger')) {
+            const accountName = e.target.dataset.accountName;
+            formToSubmit = e.target.closest('form');
+            accountNameToDeleteSpan.textContent = `"${accountName}"`;
+        }
+    });
+
+    async function updateAccountName(id, newName, row) {
+        const nameCell = row.querySelector('.account-name-cell');
+        const actionsCell = row.querySelector('.account-actions-cell');
+
+        try {
+            const response = await fetch(`/api/accounts/update/${id}/`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+                body: JSON.stringify({ account_name: newName })
+            });
+
+            const data = await response.json();
+
+            if (response.ok) {
+                nameCell.textContent = data.new_name;
+                actionsCell.innerHTML = row.dataset.originalActions;
+            } else {
+                alert('Error: ' + data.error);
+                nameCell.textContent = row.dataset.originalName;
+                actionsCell.innerHTML = row.dataset.originalActions;
+            }
+        } catch (error) {
+            alert('An unexpected error occurred. Please try again.');
+            nameCell.textContent = row.dataset.originalName;
+            actionsCell.innerHTML = row.dataset.originalActions;
+        }
+    }
+});
+</script>
+
+{% endblock %}

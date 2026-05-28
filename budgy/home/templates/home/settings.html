@@ -1,0 +1,161 @@
+{% extends "home/layout.html" %}
+{% load static %}
+{% block title %}Settings{% endblock %}
+
+{% block body %}
+<div class="app-container">
+    <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="profile-icon"></div>
+            </div>
+            <nav class="sidebar-nav">
+                <ul>
+                    <li>
+                        <a href="{% url 'home' request.user.id %}">HOME</a>
+                    </li>
+                    <li>
+                        <a href="{% url 'dashboard' request.user.id %}">Dashboard</a>
+                    </li>
+                    <li>
+                        <a href="{% url 'transaction_income' request.user.id %}">Transaction</a>
+                    </li>
+                    <li>
+                        <a href="{% url 'account_management' request.user.id %}">Accounts</a>
+                    </li>
+                    <li>
+                        <a href="{% url 'stats' request.user.id %}">Stats</a>
+                    </li>
+                    <li class="active">
+                        <a href="{% url 'settings' request.user.id %}">Settings</a>
+                    </li>
+                </ul>
+            </nav>
+            <div class="sidebar-footer">
+                <div class="logout-icon"></div>
+
+            </div>
+        </aside>
+
+    <main class="main-content">
+        <div class="box">
+            <div class="text-center mb-4">
+                <img src="{{ request.user.profile.image.url }}" class="rounded-circle" style="width: 120px; height: 120px; object-fit: cover; border: 3px solid #64b5f6;">
+                <h3 class="mt-3">Edit Profile</h3>
+            </div>
+
+            <!-- Profile Picture Form -->
+            <form method="POST" enctype="multipart/form-data" class="mb-4">
+                {% csrf_token %}
+                <label for="id_image" class="form-label">Update Profile Picture</label>
+                <div class="input-group">
+                    <input type="file" name="image" class="form-control" id="id_image" accept="image/*">
+                    <button class="btn btn-outline-primary" type="submit" name="update_picture">Upload</button>
+                </div>
+            </form>
+            <hr>
+
+            <!-- Username Form -->
+            <form method="POST">
+                {% csrf_token %}
+                <div class="mb-3">
+                    <label for="{{ u_form.username.id_for_label }}" class="form-label">Username</label>
+                    <input type="text" name="username" class="form-control" value="{{ u_form.instance.username }}" required id="{{ u_form.username.id_for_label }}">
+                </div>
+                <button type="submit" name="update_username" class="btn btn-primary">Save Username</button>
+            </form>
+            <hr>
+
+            <!-- Email Form -->
+            <form method="POST">
+                {% csrf_token %}
+                <div class="mb-3">
+                    <label for="{{ e_form.email.id_for_label }}" class="form-label">Email Address</label>
+                    <input type="email" name="email" class="form-control" value="{{ e_form.instance.email }}" required id="{{ e_form.email.id_for_label }}">
+                    {% for error in e_form.email.errors %}
+                       <div class="text-danger mt-1"><small>{{ error }}</small></div>
+                    {% endfor %}
+                </div>
+                <button type="submit" name="update_email" class="btn btn-primary">Save Email</button>
+            </form>
+            <hr>
+
+            <hr>
+
+            <!-- Mascot Toggle Form -->
+            <form method="POST" class="mb-4">
+                {% csrf_token %}
+                <input type="hidden" name="update_mascot" value="1">
+
+                <label class="form-label">Desktop Mascot</label>
+                <div class="form-check form-switch">
+                    <input class="form-check-input"
+                           type="checkbox"
+                           id="id_show_mascot"
+                           name="show_mascot"
+                           {% if request.user.profile.show_mascot %}checked{% endif %}>
+                    <label class="form-check-label" for="id_show_mascot">
+                        Show BUDGY in the corner of the screen.
+                    </label>
+                </div>
+                <small class="text-muted">
+                    If turned off, it will not appear on any page (you need to reload the page after saving).
+                </small>
+
+                <button type="submit"
+                        class="btn btn-outline-primary btn-sm mt-2">
+                    Save Mascot Setting
+                </button>
+            </form>
+
+            <hr>
+
+            <!-- Other Actions -->
+            <div class="mt-4">
+                <div class="mb-3">
+                    <a href="{% url 'password_change' %}" class="btn btn-secondary">Change Password</a>
+                </div>
+                <div class="mb-3">
+                     <button type="button" class="btn btn-link text-danger ps-0" data-bs-toggle="modal" data-bs-target="#deleteAccountModal">
+                        Delete account
+                    </button>
+                </div>
+                <div class="text-end">
+                    <a href="{% url 'logout' %}"
+                        class="btn btn-danger"
+                        onclick="
+                            Object.keys(sessionStorage)
+                            .filter(k => k.startsWith('pet_session_seen'))
+                            .forEach(k => sessionStorage.removeItem(k));
+                        ">
+                        Log Out
+                    </a>
+                </div>
+            </div>
+        </div>
+    </main>
+</div>
+
+<!-- Delete Account Modal -->
+<div class="modal fade" id="deleteAccountModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header bg-danger text-white">
+        <h5 class="modal-title">Delete Account Confirmation</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <p>This action is irreversible. All your data, including transactions and accounts, will be permanently deleted.</p>
+        <p>To confirm this action, please enter your password:</p>
+        <form method="POST" action="{% url 'delete_account' %}" id="deleteAccountForm">
+            {% csrf_token %}
+            <input type="password" name="password" class="form-control" placeholder="Enter your password" required>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="submit" form="deleteAccountForm" class="btn btn-danger">Yes, I understand. Delete my account.</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

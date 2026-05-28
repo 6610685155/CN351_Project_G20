@@ -1,0 +1,413 @@
+{% extends "home/layout.html" %}
+{% load static %}
+
+{% block title %}
+    Stats
+{% endblock title %}
+
+{% block body %}
+    <!-- Content -->
+    <div class="app-container">
+        <!-- side bar -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="profile-icon"></div>
+            </div>
+            <nav class="sidebar-nav">
+                <ul>
+                    <li>
+                        <a href="{% url 'home' request.user.id %}">HOME</a>
+                    </li>
+                    <li>
+                        <a href="{% url 'dashboard' request.user.id %}">Dashboard</a>
+                    </li>
+                    <li>
+                        <a href="{% url 'transaction_income' request.user.id %}">Transaction</a>
+                    </li>
+                    <li>
+                        <a href="{% url 'account_management' request.user.id %}">Accounts</a>
+                    </li>
+                    <li class="active">
+                        <a href="{% url 'stats' request.user.id %}">Stats</a>
+                    </li>
+                    <li>
+                        <a href="{% url 'settings' request.user.id %}">Settings</a>
+                    </li>
+                </ul>
+            </nav>
+            <div class="sidebar-footer">
+                <div class="logout-icon"></div>
+            </div>
+        </aside>
+
+        <!-- Main Content for Stats -->
+        <main class="main-content">
+            <div class="box" style="height: 100%;">
+                <!-- Header: Month/Year Selector -->
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                    <div id="month-navigator" style="display: flex; align-items: center; gap: 15px;">
+                        <button id="prev-month-btn" style="background: none; border: 1px solid #ccc; border-radius: 50%; width: 30px; height: 30px; cursor: pointer;">&lt;</button>
+                        <h3 id="current-month-display" style="margin: 0;">October 2025</h3>
+                        <button id="next-month-btn" style="background: none; border: 1px solid #ccc; border-radius: 50%; width: 30px; height: 30px; cursor: pointer;">&gt;</button>
+                    </div>
+                    <div id="stats-year-selector" style="display: none;">
+                        <select id="stats-year-select" class="form-select">
+                            {% if not years %}
+                            <option>No transaction data</option>
+                            {% endif %}
+                            {% for year in years %}
+                            <option value="{{ year }}" {% if forloop.first %}selected{% endif %}>{{ year }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Tabs Navigation -->
+                <div class="tabs">
+                    <button class="tab-button active" data-tab="income">Income</button>
+                    <button class="tab-button" data-tab="expense">Expense</button>
+                    <button class="tab-button" data-tab="compare">Compare</button>
+                    <button class="tab-button" data-tab="statistics">Statistics</button>
+                </div>
+
+                <!-- Tab Content Area -->
+                <div style="margin-top: 20px;">
+                    <!-- Income Content -->
+                    <div id="income-content" class="tab-content">
+                        <div class="row align-items-center">
+                            <div class="col-md-5">
+                                <canvas id="income-chart"></canvas>
+                            </div>
+                            <div class="col-md-7">
+                                <h4>Overall Income: <span id="income-total">0฿</span></h4>
+                                <div id="income-summary-list"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Expense Content -->
+                    <div id="expense-content" class="tab-content" style="display: none;">
+                         <div class="row align-items-center">
+                            <div class="col-md-5">
+                                <canvas id="expense-chart"></canvas>
+                            </div>
+                            <div class="col-md-7">
+                                <h4>Overall Expense: <span id="expense-total">0฿</span></h4>
+                                <div id="expense-summary-list"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Compare Content -->
+                    <div id="compare-content" class="tab-content" style="display: none;">
+                        <div class="row">
+                            <div class="col-md-6 text-center">
+                                <label>Compare 1</label>
+                                <select class="form-select mb-2" id="compare-select-1">
+                                    {% for month in expense_months %}
+                                    <option value="{{ month.value }}">{{ month.text }}</option>
+                                    {% endfor %}
+                                </select>
+                                <div style="max-width: 250px; margin: auto;"><canvas id="compare-chart-1"></canvas></div>
+                                <h5 class="mt-2" id="compare-total-1"></h5>
+                            </div>
+                            <div class="col-md-6 text-center">
+                                <label>Compare 2</label>
+                                <select class="form-select mb-2" id="compare-select-2">
+                                     {% for month in expense_months %}
+                                    <option value="{{ month.value }}" {% if forloop.counter == 2 %}selected{% endif %}>{{ month.text }}</option>
+                                    {% endfor %}
+                                </select>
+                                <div style="max-width: 250px; margin: auto;"><canvas id="compare-chart-2"></canvas></div>
+                                <h5 class="mt-2" id="compare-total-2"></h5>
+                            </div>
+                        </div>
+                        <hr class="my-3">
+                        <div id="comparison-results" class="p-3 bg-light rounded">
+                            <!-- Comparison text will be generated by JS -->
+                        </div>
+                    </div>
+
+                    <!-- Statistics Content -->
+                    <div id="statistics-content" class="tab-content" style="display: none;">
+                        <canvas id="statistics-chart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+    
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="footer-social">
+            <span><a href="{% url 'contact' %}">Contact Us</a></span>
+            <a href="#"><i class="fab fa-facebook-f"></i></a>
+            <a href="#"><i class="fab fa-line"></i></a>
+            <a href="#"><i class="fab fa-instagram"></i></a>
+            <a href="#"><i class="far fa-envelope"></i></a>
+        </div>
+        <div class="footer-links">
+            <a href="#">Term of Use</a>
+            <a href="#">Privacy Policy</a>
+        </div>
+    </footer>
+
+    <!-- Chart.js Library -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Day.js Library for easier date manipulation -->
+    <script src="https://cdn.jsdelivr.net/npm/dayjs@1/dayjs.min.js"></script>
+
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // --- 1. STATE MANAGEMENT & SETUP ---
+        let currentDate = dayjs();
+        let activeTab = 'income';
+        let incomeChart, expenseChart, compareChart1, compareChart2, statisticsChart;
+
+        const colorThemes = {
+            income: [
+                '#228B22', '#4F7942', '#454B1B', '#50C878', '#4CBB17',
+                '#ECFFDC', '#808000', '#C9CC3F', '#96DED1', '#008080'
+            ],
+            expense: [
+                '#DC143C', '#EE4B2B', '#702963', '#811331', '#F88379',
+                '#E35335', '#E0115F', '#630330', '#DC143C', '#C41E3A'
+            ]
+        };
+
+        // --- 2. DOM ELEMENT REFERENCES ---
+        const monthDisplay = document.getElementById('current-month-display');
+        const prevMonthBtn = document.getElementById('prev-month-btn');
+        const nextMonthBtn = document.getElementById('next-month-btn');
+        const tabs = document.querySelectorAll('.tab-button');
+        const contentAreas = document.querySelectorAll('.tab-content');
+        const yearSelect = document.getElementById('stats-year-select');
+        const compareSelect1 = document.getElementById('compare-select-1');
+        const compareSelect2 = document.getElementById('compare-select-2');
+        const monthNavigator = document.getElementById('month-navigator');
+        const yearSelector = document.getElementById('stats-year-selector');
+
+
+        // --- 3. HELPER FUNCTIONS ---
+        const formatCurrency = (num) => `${parseFloat(num).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}฿`;
+        
+        // --- 4. DATA FETCHING & RENDERING FUNCTIONS ---
+        async function updatePieChart(type) {
+            const year = currentDate.year();
+            const month = currentDate.month() + 1;
+            const response = await fetch(`/api/stats/summary/?year=${year}&month=${month}&type=${type}`);
+            const data = await response.json();
+
+            const chartId = `${type}-chart`;
+            const totalId = `${type}-total`;
+            const listId = `${type}-summary-list`;
+            let chartInstance = (type === 'income') ? incomeChart : expenseChart;
+            const currentTheme = colorThemes[type];
+
+            const canvas = document.getElementById(chartId);
+            const totalEl = document.getElementById(totalId);
+            const listEl = document.getElementById(listId);
+
+            totalEl.textContent = formatCurrency(data.overall_total || 0);
+            
+            listEl.innerHTML = '';
+            if (data.labels && data.labels.length > 0) {
+                data.labels.forEach((label, i) => {
+                    const percentage = (data.values[i] / data.overall_total * 100).toFixed(1);
+                    const listItem = document.createElement('div');
+                    listItem.className = 'd-flex justify-content-between align-items-center p-2';
+                    listItem.innerHTML = `
+                        <div>
+                            <span style="display: inline-block; width: 12px; height: 12px; background-color: ${currentTheme[i % currentTheme.length]}; border-radius: 50%;"></span>
+                            <span class="ms-2">${label}</span>
+                        </div>
+                        <strong>${formatCurrency(data.values[i])} (${percentage}%)</strong>
+                    `;
+                    listEl.appendChild(listItem);
+                });
+            } else {
+                listEl.innerHTML = '<p>No data for this month.</p>';
+            }
+
+            if (chartInstance) {
+                chartInstance.destroy();
+            }
+            
+            // ########## THE FIX IS HERE ##########
+            chartInstance = new Chart(canvas.getContext('2d'), { // Changed 'd' to '2d'
+                type: 'doughnut',
+                data: {
+                    labels: data.labels,
+                    datasets: [{
+                        data: data.values,
+                        backgroundColor: currentTheme,
+                        borderColor: '#fff',
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: { legend: { display: false } }
+                }
+            });
+            // #####################################
+
+            if (type === 'income') incomeChart = chartInstance;
+            else expenseChart = chartInstance;
+        }
+
+        async function updateStatisticsChart() {
+            const year = yearSelect.value;
+            if (!year) return;
+            const response = await fetch(`/api/stats/yearly/?year=${year}`);
+            const data = await response.json();
+
+            const canvas = document.getElementById('statistics-chart');
+            if (statisticsChart) {
+                statisticsChart.destroy();
+            }
+            statisticsChart = new Chart(canvas.getContext('2d'), {
+                type: 'line',
+                data: {
+                    labels: data.labels,
+                    datasets: [
+                        {
+                            label: 'Income',
+                            data: data.income,
+                            borderColor: '#4CAF50',
+                            backgroundColor: 'rgba(76, 175, 80, 0.1)',
+                            fill: true,
+                            tension: 0.3
+                        },
+                        {
+                            label: 'Expense',
+                            data: data.expense,
+                            borderColor: '#F44336',
+                            backgroundColor: 'rgba(244, 67, 54, 0.1)',
+                            fill: true,
+                            tension: 0.3
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    scales: { y: { beginAtZero: true } }
+                }
+            });
+        }
+        
+        async function updateCompareView() {
+            const month1_val = compareSelect1.value;
+            const month2_val = compareSelect2.value;
+
+            if (!month1_val || !month2_val) return;
+
+            const [year1, month1] = month1_val.split('-');
+            const [year2, month2] = month2_val.split('-');
+
+            const [res1, res2] = await Promise.all([
+                fetch(`/api/stats/summary/?year=${year1}&month=${month1}&type=expense`),
+                fetch(`/api/stats/summary/?year=${year2}&month=${month2}&type=expense`)
+            ]);
+            const data1 = await res1.json();
+            const data2 = await res2.json();
+            
+            document.getElementById('compare-total-1').textContent = formatCurrency(data1.overall_total);
+            document.getElementById('compare-total-2').textContent = formatCurrency(data2.overall_total);
+
+            if(compareChart1) compareChart1.destroy();
+            compareChart1 = new Chart(document.getElementById('compare-chart-1').getContext('2d'), {
+                type: 'pie', data: { labels: data1.labels, datasets: [{ data: data1.values, backgroundColor: colorThemes.expense }] },
+                options: { plugins: { legend: { display: false } } }
+            });
+            if(compareChart2) compareChart2.destroy();
+            compareChart2 = new Chart(document.getElementById('compare-chart-2').getContext('2d'), {
+                type: 'pie', data: { labels: data2.labels, datasets: [{ data: data2.values, backgroundColor: colorThemes.expense }] },
+                options: { plugins: { legend: { display: false } } }
+            });
+
+            generateComparisonText(data1, data2);
+        }
+        
+        function generateComparisonText(data1, data2) {
+            const resultsDiv = document.getElementById('comparison-results');
+            let html = `<h5>Comparison Summary</h5>`;
+            const diff = data2.overall_total - data1.overall_total;
+            const percentageDiff = data1.overall_total === 0 ? 100 : (diff / data1.overall_total * 100);
+            
+            if (diff > 0) {
+                html += `<p class="text-danger">Overall, you spent <strong>${formatCurrency(diff)} (${percentageDiff.toFixed(1)}%) more</strong> in the second period.</p>`;
+            } else if (diff < 0) {
+                html += `<p class="text-success">Overall, you spent <strong>${formatCurrency(Math.abs(diff))} (${Math.abs(percentageDiff).toFixed(1)}%) less</strong> in the second period.</p>`;
+            } else {
+                html += `<p>Your spending was the same in both periods.</p>`;
+            }
+            const allCategories = new Set([...data1.labels, ...data2.labels]);
+            html += `<h6>By Category:</h6><ul>`;
+            allCategories.forEach(cat => {
+                const val1 = data1.values[data1.labels.indexOf(cat)] || 0;
+                const val2 = data2.values[data2.labels.indexOf(cat)] || 0;
+                const catDiff = val2 - val1;
+                if(catDiff !== 0) {
+                    const direction = catDiff > 0 ? 'increase' : 'decrease';
+                    const color = catDiff > 0 ? 'text-danger' : 'text-success';
+                    html += `<li class="${color}">${cat}: A ${direction} of <strong>${formatCurrency(Math.abs(catDiff))}</strong></li>`;
+                }
+            });
+            html += `</ul>`;
+            resultsDiv.innerHTML = html;
+        }
+
+        // --- 5. EVENT LISTENERS ---
+        prevMonthBtn.addEventListener('click', () => {
+            currentDate = currentDate.subtract(1, 'month');
+            updateDisplay();
+        });
+        nextMonthBtn.addEventListener('click', () => {
+            currentDate = currentDate.add(1, 'month');
+            updateDisplay();
+        });
+
+        tabs.forEach(tab => {
+            tab.addEventListener('click', () => {
+                activeTab = tab.dataset.tab;
+                
+                tabs.forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+
+                contentAreas.forEach(area => area.style.display = 'none');
+                document.getElementById(`${activeTab}-content`).style.display = 'block';
+                
+                monthNavigator.style.display = (activeTab === 'statistics' || activeTab === 'compare') ? 'none' : 'flex';
+                yearSelector.style.display = activeTab === 'statistics' ? 'block' : 'none';
+
+                updateDisplay();
+            });
+        });
+
+        yearSelect.addEventListener('change', updateStatisticsChart);
+        compareSelect1.addEventListener('change', updateCompareView);
+        compareSelect2.addEventListener('change', updateCompareView);
+
+        // --- 6. INITIALIZATION & UPDATE LOGIC ---
+        function updateDisplay() {
+            monthDisplay.textContent = currentDate.format('MMMM YYYY');
+            switch (activeTab) {
+                case 'income':
+                    updatePieChart('income');
+                    break;
+                case 'expense':
+                    updatePieChart('expense');
+                    break;
+                case 'compare':
+                    updateCompareView();
+                    break;
+                case 'statistics':
+                    updateStatisticsChart();
+                    break;
+            }
+        }
+        updateDisplay();
+    });
+    </script>
+{% endblock body %}

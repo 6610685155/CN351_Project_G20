@@ -1,0 +1,201 @@
+{% extends "home/layout.html" %}
+{% block title %}Dashboard{% endblock title %}
+
+{% block body %}
+
+<div class="app-container">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+        <div class="sidebar-header">
+            <div class="profile-icon"></div>
+        </div>
+        <nav class="sidebar-nav">
+            <ul>
+                <li><a href="{% url 'home' request.user.id %}">HOME</a></li>
+                <li class="active"><a href="{% url 'dashboard' request.user.id %}">Dashboard</a></li>
+                <li><a href="{% url 'transaction_income' request.user.id %}">Transaction</a></li>
+                <li><a href="{% url 'account_management' request.user.id %}">Accounts</a></li>
+                <li><a href="{% url 'stats' request.user.id %}">Stats</a></li>
+                <li><a href="{% url 'settings' request.user.id %}">Settings</a></li>
+            </ul>
+        </nav>
+        <div class="sidebar-footer">
+            <div class="logout-icon"></div>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <div class="box spending-box">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h4>Current Spending</h4>
+                <div class="btn-group">
+                    <button class="btn btn-outline-primary active" id="btn-daily">Daily</button>
+                    <button class="btn btn-outline-primary" id="btn-monthly">Monthly</button>
+                    <button class="btn btn-outline-primary" id="btn-yearly">Yearly</button>
+                </div>
+            </div>
+            <!-- Date selectors -->
+            <div class="mb-3" id="date-selectors">
+                <input type="date" id="daily-picker" class="form-control" style="max-width:220px">
+                <input type="month" id="monthly-picker" class="form-control d-none" style="max-width:220px">
+                <input type="number" id="yearly-picker" class="form-control d-none" style="max-width:220px" placeholder="Enter Year" min="2000" max="2100">
+            </div>
+            <!-- Spending List Table -->
+            <table id="spending-list">
+                <thead>
+                    <tr>
+                        <th>Category</th>
+                        <th>Income (฿)</th>
+                        <th>Expense (฿)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td colspan="3" style="text-align:center; color:#888;">Select a date to view spending...</td>
+                    </tr>
+                </tbody>
+                <tfoot>
+                    <tr>
+                        <th>Total</th>
+                        <th id="total-income">0</th>
+                        <th id="total-expense">0</th>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </main>
+
+    <!-- Right Sidebar -->
+    <aside class="right-sidebar">
+        <!-- Accounts -->
+        <div class="account-container">
+            <h3>Accounts</h3>
+                <div class="box">
+                    <h5>Transaction Rate</h5>
+                    <p>Example: 12 transactions / week</p>
+                </div>
+                <!-- Bottom-right: Account Balance -->
+                <div class="box">
+                    <h5>Accounts</h5>
+                    <div id="account-box">
+                        <p class="text-muted">Loading accounts...</p>
+                    </div>
+                <hr>
+                <h5>Total Balance</h5>
+            <h2 id="total-balance" style="color:#0077b6;">฿ 0.00</h2>
+        </div>
+    </aside>
+
+</div>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="footer-social">
+            <span>Contact Us</span>
+            <a href="#"><i class="fab fa-facebook-f"></i></a>
+            <a href="#"><i class="fab fa-line"></i></a>
+            <a href="#"><i class="fab fa-instagram"></i></a>
+            <a href="#"><i class="far fa-envelope"></i></a>
+        </div>
+        <div class="footer-links">
+            <a href="#">Term of Use</a>
+            <a href="#">Privacy Policy</a>
+        </div>
+    </footer>
+
+<script>
+// ----------------- Mode switching -----------------
+function setMode(mode){
+    document.getElementById("daily-picker").classList.toggle("d-none", mode!=="daily");
+    document.getElementById("monthly-picker").classList.toggle("d-none", mode!=="monthly");
+    document.getElementById("yearly-picker").classList.toggle("d-none", mode!=="yearly");
+
+    ["btn-daily","btn-monthly","btn-yearly"].forEach(id=>document.getElementById(id).classList.remove("active"));
+    document.getElementById(`btn-${mode}`).classList.add("active");
+}
+
+// Event listeners
+document.getElementById("btn-daily").onclick = ()=>setMode("daily");
+document.getElementById("btn-monthly").onclick = ()=>setMode("monthly");
+document.getElementById("btn-yearly").onclick = ()=>setMode("yearly");
+
+document.getElementById("daily-picker").onchange = e=>fetchSpending("daily", e.target.value);
+document.getElementById("monthly-picker").onchange = e=>fetchSpending("monthly", e.target.value);
+document.getElementById("yearly-picker").onchange = e=>fetchSpending("yearly", e.target.value);
+
+// ----------------- Render Spending -----------------
+function renderList(spendings){
+    const tbody = document.querySelector("#spending-list tbody");
+    tbody.innerHTML = "";
+    let totalIncome=0, totalExpense=0;
+
+    if(spendings.length===0){
+        tbody.innerHTML = `<tr><td colspan="3" style="text-align:center;color:#888;">No records found.</td></tr>`;
+    } else {
+        spendings.forEach(item=>{
+            let income=item.type==="income"?item.amount.toFixed(2):"";
+            let expense=item.type==="expense"?item.amount.toFixed(2):"";
+            if(item.type==="income") totalIncome+=item.amount;
+            if(item.type==="expense") totalExpense+=item.amount;
+
+            tbody.innerHTML += `<tr>
+                <td>${item.category}</td>
+                <td>${income}</td>
+                <td>${expense}</td>
+            </tr>`;
+        });
+    }
+    document.getElementById("total-income").textContent = totalIncome.toFixed(2);
+    document.getElementById("total-expense").textContent = totalExpense.toFixed(2);
+}
+
+// ----------------- Fetch Spending -----------------
+async function fetchSpending(mode,value){
+    const params = new URLSearchParams({mode});
+    if(mode==="daily") params.append("date", value);
+    if(mode==="monthly") params.append("month", value);
+    if(mode==="yearly") params.append("year", value);
+
+    const response = await fetch(`/api/spending/?${params.toString()}`);
+    const data = await response.json();
+    renderList(data.spendings);
+}
+
+//  ----------------- Fetch Account -----------------
+    async function fetchAccounts() {
+        const response = await fetch("/api/accounts/");
+        const data = await response.json();
+        const box = document.querySelector("#account-box");
+        box.innerHTML = "";
+        if (data.accounts.length === 0) {
+            box.innerHTML = `<p class="text-muted">No accounts found.</p>`;
+        } else {
+            data.accounts.forEach(acc => {
+            box.innerHTML += `<p>${acc.name}: <strong>฿ ${acc.balance.toFixed(2)}</strong></p>`;
+            });
+        }
+        // total balance
+        document.getElementById("total-balance").textContent = `฿ ${data.total_balance.toFixed(2)}`;
+        }
+        // โหลดข้อมูลบัญชีเมื่อเปิดหน้า
+        document.addEventListener("DOMContentLoaded", fetchAccounts);
+        // Event listeners เหมือนเดิม
+        document.getElementById("btn-daily").onclick = () => setMode("daily");
+        document.getElementById("btn-monthly").onclick = () => setMode("monthly");
+        document.getElementById("btn-yearly").onclick = () => setMode("yearly");
+        document.getElementById("daily-picker").onchange = (e) => fetchSpending("daily", e.target.value);
+        document.getElementById("monthly-picker").onchange = (e) => fetchSpending("monthly", e.target.value);
+        document.getElementById("yearly-picker").onchange = (e) => fetchSpending("yearly", e.target.value);
+// ----------------- Set daily picker default -----------------
+window.onload = function(){
+    const dateInput=document.getElementById('daily-picker');
+    if(dateInput){
+        const today=new Date();
+        dateInput.value=`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+        setMode("daily");
+        fetchSpending("daily", dateInput.value);
+    }
+};
+</script>
+{% endblock body %}

@@ -1,0 +1,768 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="keywords" content="manage, money, profit" />
+    <meta name="description" content="Manage Your Finances" />
+    <title>'BUDGY' -
+      {% block title %}
+      {% endblock title %}
+    </title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+          rel="stylesheet" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet"
+          href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;600&display=swap"
+          rel="stylesheet">
+    {% load static %}
+    <link href="{% static 'home/style.css' %}" rel="stylesheet">
+    <style>
+      /* small safety: ensure pet is on top and transitions for resize if used */
+      #pet { transition: width 0.18s ease, height 0.18s ease, transform 0.18s ease; touch-action: none; }
+      #pet-talk { pointer-events: none; }
+    </style>
+  </head>
+  <body   
+  data-page="{{ request.resolver_match.url_name|default:'' }}"
+  data-user-id="{{ request.user.id }}">
+    <!-- Navbar -->
+    <nav class="navbar navbar-expand-lg navbar-dark">
+      <div class="container">
+        <a class="navbar-brand" href="#">💰 BUDGY</a>
+        <button class="navbar-toggler"
+                type="button"
+                data-bs-toggle="collapse"
+                data-bs-target="#navbarContent">
+          <span class="navbar-toggler-icon"></span>
+        </button>
+      </div>
+    </nav>
+    
+    <!-- แสดงข้อความจาก Django messages -->
+    {% if messages %}
+      {% for message in messages %}
+        <div class="alert {% if message.tags == 'error' %}alert-danger{% elif message.tags == 'success' %}alert-success{% else %}alert-warning{% endif %} text-center">
+          <strong>{{ message }}</strong>
+        </div>
+      {% endfor %}
+    {% endif %}
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    {% block body %}
+    {% endblock body %}
+
+    {# ---------------- Desktop Pet: ใส่ก่อนปิด body ---------------- #}
+    {% if user.is_authenticated and user.profile.show_mascot %}
+      <img id="pet" alt="pet"
+          src=""
+          style="opacity:0; position:fixed; left:40px; top:calc(100% - 280px); width:360px; height:430px; z-index:2147483646; user-select:none; touch-action:none; cursor:grab;"
+          ondragstart="return false;">
+      <div id="pet-talk"
+          style="position:fixed; padding:8px 12px; background:rgba(255,255,255,0.95); border-radius:10px; box-shadow:0 6px 18px rgba(0,0,0,0.12); display:none; z-index:2147483645; max-width:260px;">
+      </div>
+
+      <!-- script น้อง mascot ทั้งก้อนของเราต่อจากนี้เหมือนเดิม -->
+      <script>
+      (async function () {
+        const EDGE_MARGIN = 10;
+        const POLL_INTERVAL_MS = 60000;
+        let LONGPRESS_MS = 120;
+        const MOVE_THRESHOLD = 5;
+
+        const petEl = document.getElementById("pet");
+        const talkEl = document.getElementById("pet-talk");
+        if (!petEl) return;
+
+        /* ---------- CONFIG: sprite paths ---------- */
+        const STATIC = {
+          idle:     "{% static 'home/pet/idle.png' %}?v=2",
+          falling:  "{% static 'home/pet/falling.png' %}?v=2",
+          picked:   "{% static 'home/pet/picked.png' %}?v=2",
+          teaching: "{% static 'home/pet/teaching.png' %}?v=2",
+          happy:    "{% static 'home/pet/happy.png' %}?v=2",
+          danger:   "{% static 'home/pet/danger.png' %}?v=2",
+          waving:   "{% static 'home/pet/waving.png' %}?v=2"
+        };
+
+        function testImage(src) {
+          return new Promise(res => {
+            if (!src) return res(false);
+            const i = new Image();
+            i.onload = () => res(true);
+            i.onerror = () => res(false);
+            i.src = src;
+          });
+        }
+
+        function emojiDataURL(e) {
+          const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'>
+            <text x='50%' y='50%' font-size='120' dominant-baseline='middle' text-anchor='middle'>${e}</text>
+          </svg>`;
+          return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
+        }
+
+        async function resolveImages() {
+          const idleOK   = await testImage(STATIC.idle);
+          const idleSrc  = idleOK ? STATIC.idle   : emojiDataURL('🐱');
+          const falling  = (await testImage(STATIC.falling )) ? STATIC.falling  : idleSrc;
+          const picked   = (await testImage(STATIC.picked  )) ? STATIC.picked   : idleSrc;
+          const teaching = (await testImage(STATIC.teaching)) ? STATIC.teaching : idleSrc;
+          const happy    = (await testImage(STATIC.happy   )) ? STATIC.happy    : idleSrc;
+          const danger   = (await testImage(STATIC.danger  )) ? STATIC.danger   : idleSrc;
+          const waving   = (await testImage(STATIC.waving)) ? STATIC.waving : happySrc;
+          
+          return { idleSrc: idleSrc, fallingSrc: falling, pickedSrc: picked,
+                  teachingSrc: teaching, happySrc: happy, dangerSrc: danger,  wavingSrc: waving  };
+        }
+
+        const { idleSrc, fallingSrc, pickedSrc, teachingSrc, happySrc, dangerSrc, wavingSrc } =
+          await resolveImages();
+
+        /* ---------- first load: choose initial image, avoid flicker ---------- */
+        const userId = document.body.dataset.userId || "guest";
+        const SESSION_KEY = `pet_session_seen_user_${userId}`;
+        const isFreshSession = !sessionStorage.getItem(SESSION_KEY);
+
+        async function setInitialImageAndShow() {
+          const chosen = isFreshSession ? happySrc : idleSrc;
+
+          await new Promise(res => {
+            const img = new Image();
+            let to = setTimeout(res, 300); // safety timeout
+            img.onload  = () => { clearTimeout(to); res(); };
+            img.onerror = () => { clearTimeout(to); res(); };
+            img.src = chosen;
+          });
+
+          petEl.src = chosen;
+          requestAnimationFrame(() => { petEl.style.opacity = 1; });
+        }
+
+        await new Promise(res => setTimeout(res, 30)); // ให้วัด layout ได้ใกล้เคียงจริง
+        await setInitialImageAndShow();
+
+        /* ---------- small helpers ---------- */
+        function clamp(n, lo, hi) { return Math.max(lo, Math.min(hi, n)); }
+
+        function showChat(text, ttl = 3500) {
+          if (!talkEl) return;
+          talkEl.textContent = text;
+          talkEl.style.display = "block";
+          clearTimeout(talkEl._t);
+          talkEl._t = setTimeout(() => { talkEl.style.display = "none"; }, ttl);
+        }
+
+        /* ---------- finance mood lines ---------- */
+        const moodLines = {
+          happy: ["ยอดเงินดีมากเลย! ภูมิใจแทนนะ! 😊","สุดยอดดด~ เก็บเงินได้ดีมาก!","รักษาระดับนี้ไว้ เราเชื่อในตัวนาย! ✨"],
+          neutral: ["สถานะตอนนี้โอเคเลยนะ~","วันนี้ก็ดูปกติดีเนาะ 😊","มีอะไรให้ช่วยจัดการมั้ยล่ะ?"],
+          warn: ["ระวังหน่อยนะ ช่วงนี้ใช้เงินเยอะไปนิด… 😥","เราว่าเริ่มต้องวางแผนแล้วล่ะ!","ลองเช็คดูว่ามีรายจ่ายไหนตัดได้บ้างมั้ย?"],
+          danger: ["โอ้ยย… ตอนนี้อันตรายนะจริง ๆ! ⚠️","ยอดเงินใกล้หมดแล้วนะ… ระวังด้วย!","เราห่วงนายอยู่นะ ลองลดรายจ่ายก่อนเนอะ 😭"]
+        };
+        function getRandomStatusLine(status){ const arr=moodLines[status]||[]; return arr.length?arr[Math.floor(Math.random()*arr.length)]:null; }
+
+        // หน้า พิเศทแต่ละหน้าให้สอนเรื่องอะไร
+        const PAGE_TEACHING = {
+          // รายรับ
+          transaction_income: [
+            "หน้านี้เอาไว้บันทึกรายรับ เช่น เงินเดือนหรือรายได้พิเศษ 💰\n1. เลือกวันที่\n2. เลือกหมวดรายรับ\n3. เลือกบัญชีที่เงินจะเข้า\n4. กรอกจำนวนแล้วกดเพิ่ม"
+          ],
+          // รายจ่าย
+          transaction_expense: [
+            "หน้านี้ใช้บันทึกรายจ่ายต่าง ๆ 🧾\n1. เลือกวันที่\n2. เลือกหมวดรายจ่าย\n3. เลือกบัญชีที่จะถูกหักเงิน\n4. กรอกจำนวนแล้วบันทึก"
+          ],
+          // โอนไปมา
+          transaction_transfer: [
+            "หน้านี้ใช้ย้ายเงินระหว่างบัญชี เช่น จาก Wallet ไป Bank 🏦\n1. เลือกวันที่\n2. เลือกบัญชีต้นทางและปลายทาง\n3. กรอกจำนวน\n4. บันทึก ระบบจะหักจากต้นทางและบวกให้ปลายทาง"
+          ],
+          // จัดการบัญชี (สร้างบัญชีใหม่ ฯลฯ)
+          account_management: [
+            "หน้านี้เอาไว้จัดการบัญชีเงินของนาย 💳\n• ดูรายการบัญชีทั้งหมด\n• เพิ่มบัญชีใหม่ (เช่น ธนาคาร/กระเป๋าเงิน)\n• ลบบัญชีที่ไม่ใช้แล้ว (ถ้าเงินในบัญชีนั้นเป็น 0)\n*บัญชี 'Cash' มักจะลบหรือแก้ไขพิเศษตามที่ตั้งค่าไว้นะ*"
+          ],
+          dashboard: [
+            "หน้านี้คือ Dashboard 📊\n• ดูภาพรวมรายรับ-รายจ่ายทั้งหมด\n• เช็คยอดเงินคงเหลือ\n• เห็นสถานะการเงินของนายแบบเร็ว ๆ\n\nลองดูกราฟแล้วคิดก่อนใช้เงินนะ~ 😉"
+          ],
+          // Stats
+          stats: [
+            "หน้านี้คือ Stats 📈\n• ดูสถิติรายรับ-รายจ่าย\n• เปรียบเทียบแต่ละหมวด\n• เลือกดูแบบรายวัน / เดือน / ปี\n\nกราฟพวกนี้ช่วยให้นายรู้ว่าเงินหายไปไหน 👀"
+          ],
+          // ตั้งค่าโปรไฟล์ / อีเมล / รหัสผ่าน / logout
+          settings: [
+            "หน้านี้คือหน้า Settings ⚙️\n• เปลี่ยนรูปโปรไฟล์\n• แก้ Username\n• แก้ Email\n• เปลี่ยนรหัสผ่าน\n• ลบ Account\n• และ Logout ออกจากระบบได้จากตรงนี้เลย"
+          ]
+        };
+
+        // helper ดึงชื่อหน้า (มาจาก data-page บน <body>)
+        function getPageName() {
+          return (document.body.dataset.page || "").trim();
+        }
+
+
+        function randomFrom(arr) {
+          if (!arr || !arr.length) return null;
+          return arr[Math.floor(Math.random() * arr.length)];
+        }
+
+        function moodToSprite(status) {
+          if (status === "happy")  return happySrc;
+          if (status === "danger") return dangerSrc;
+          // neutral หรืออย่างอื่น ใช้ idle ไป
+          return idleSrc;
+        }
+
+        /* ---------- save / restore position (with falling info) ---------- */
+        let progressiveSaveTimer = null;
+
+        function savePos(meta = {}) {
+          try {
+            const r = petEl.getBoundingClientRect();
+            const left = Math.round(r.left);
+            const top  = Math.round(r.top);
+            const payload = Object.assign({ left, top }, meta);
+            localStorage.setItem('pet_state', JSON.stringify(payload));
+          } catch (e) {
+            console.warn("savePos failed", e);
+          }
+        }
+
+        function stopProgressiveSave() {
+          if (progressiveSaveTimer) {
+            clearInterval(progressiveSaveTimer);
+            progressiveSaveTimer = null;
+          }
+        }
+
+        function startProgressiveSaveWithVel(getVelFn) {
+          stopProgressiveSave();
+          progressiveSaveTimer = setInterval(() => {
+            try {
+              const r = petEl.getBoundingClientRect();
+              const left = Math.round(r.left);
+              const top  = Math.round(r.top);
+              const vel  = typeof getVelFn === "function" ? Math.max(0, Math.round(getVelFn())) : 0;
+              localStorage.setItem('pet_state', JSON.stringify({ left, top, falling: true, vel }));
+            } catch (e) { /* ignore */ }
+          }, 120);
+        }
+
+        /* ---------- initial / resume drop with physics ---------- */
+        let initialDropRAF = null;
+
+        function startInitialDrop(targetTop, initialVel = 0, opts = {}) {
+          if (initialDropRAF) {
+            cancelAnimationFrame(initialDropRAF);
+            initialDropRAF = null;
+          }
+          stopProgressiveSave();
+
+          const h = petEl.clientHeight || 120;
+          const floor = window.innerHeight - h - EDGE_MARGIN;
+          const desiredTop = (typeof targetTop === "number" && !Number.isNaN(targetTop))
+            ? clamp(targetTop, EDGE_MARGIN, floor)
+            : floor;
+
+          // แสดงท่าตก
+          petEl.src = fallingSrc;
+
+          if (!opts.resume) {
+            petEl.style.top = "-160px";
+            petEl.style.bottom = "auto";
+          } else {
+            petEl.style.top = Math.round(desiredTop) + "px";
+          }
+
+          let vel = Number(initialVel) || 0;
+          const GRAVITY = 2200;
+          const TERMINAL = 3000;
+          let lastT = performance.now();
+
+          startProgressiveSaveWithVel(() => vel);
+
+          function step(now) {
+            const dt = Math.max(0.001, (now - lastT) / 1000);
+            lastT = now;
+
+            vel += GRAVITY * dt;
+            if (vel > TERMINAL) vel = TERMINAL;
+
+            const r = petEl.getBoundingClientRect();
+            let newTop = r.top + vel * dt;
+
+            if (newTop >= desiredTop) {
+              newTop = desiredTop;
+              petEl.style.top = Math.round(newTop) + "px";
+
+              // เด้งดึ๋งตอนถึงพื้น
+              const impactNorm = Math.min(1, vel / 1600);
+              const squash = Math.min(0.16, impactNorm * 0.12);
+              petEl.style.transition = "transform 160ms cubic-bezier(.2,.8,.2,1)";
+              petEl.style.transform  = `scaleY(${1 - squash}) scaleX(${1 + squash/2})`;
+              setTimeout(() => {
+                petEl.style.transform = "";
+                petEl.style.transition = "";
+              }, 220);
+
+              stopProgressiveSave();
+              savePos({ falling: false, vel: 0 });
+              petEl.src = idleSrc;
+
+              initialDropRAF = null;
+              return;
+            } else {
+              petEl.style.top = Math.round(newTop) + "px";
+            }
+
+            initialDropRAF = requestAnimationFrame(step);
+          }
+
+          initialDropRAF = requestAnimationFrame(step);
+        }
+
+        // restore / resume
+        (function restore() {
+          try {
+            const s = JSON.parse(localStorage.getItem("pet_state") || "{}");
+            const w = petEl.clientWidth || 120;
+            const h = petEl.clientHeight || 120;
+            const floor = window.innerHeight - h - EDGE_MARGIN;
+            const hasSaved = (typeof s.left === "number" && typeof s.top === "number");
+
+            if (hasSaved) {
+              const left = clamp(s.left, EDGE_MARGIN,
+                Math.max(EDGE_MARGIN, window.innerWidth - w - EDGE_MARGIN));
+              petEl.style.left = left + "px";
+
+              if (s.falling) {
+                const resumeTop = clamp(s.top, EDGE_MARGIN, floor);
+                petEl.style.top = resumeTop + "px";
+                petEl.style.bottom = "auto";
+                const initialVel = typeof s.vel === "number" ? s.vel : 0;
+                startInitialDrop(floor, initialVel, { resume: true });
+              } else {
+                const top = clamp(s.top, EDGE_MARGIN, floor);
+                petEl.style.top = top + "px";
+                petEl.style.bottom = "auto";
+              }
+              savePos({ falling: !!s.falling, vel: s.vel || 0 });
+            } else {
+              // ครั้งแรก → ตกจากด้านบน
+              const defaultLeft = 40;
+              petEl.style.left = defaultLeft + "px";
+              const floor = window.innerHeight - (petEl.clientHeight || 120) - EDGE_MARGIN;
+              startInitialDrop(floor, 0, { resume: false });
+            }
+          } catch (e) {
+            console.warn("restore error", e);
+          }
+        })();
+
+        /* ---------- simple gravity after drag / carry ---------- */
+        let gravityTimer = null;
+        function applyGravity() {
+          if (gravityTimer) clearInterval(gravityTimer);
+
+          petEl.src = fallingSrc;
+
+          gravityTimer = setInterval(() => {
+            const r = petEl.getBoundingClientRect();
+            const h = petEl.clientHeight;
+            let newTop = r.top + 10;
+            const floor = window.innerHeight - h - EDGE_MARGIN;
+
+            if (newTop >= floor) {
+              newTop = floor;
+              clearInterval(gravityTimer);
+              gravityTimer = null;
+
+              petEl.style.top = Math.round(newTop) + "px";
+              petEl.style.bottom = "auto";
+
+              // เด้งตอนถึงพื้น
+              petEl.style.transition = "transform 160ms cubic-bezier(.2,.8,.2,1)";
+              petEl.style.transform  = "scaleY(0.88) scaleX(1.06)";
+              setTimeout(() => {
+                petEl.style.transform = "";
+                petEl.style.transition = "";
+              }, 220);
+
+              savePos();
+              petEl.src = idleSrc;
+              return;
+            }
+
+            petEl.style.top = Math.round(newTop) + "px";
+            petEl.style.bottom = "auto";
+          }, 16);
+        }
+
+        /* ---------- API: เอาข้อมูลการเงินมาแปลงเป็น mood ---------- */
+        async function fetchFinanceStatus(showBubble = false) {
+          try {
+            const res = await fetch("{% url 'pet_status_api' %}", {
+              headers: { Accept: "application/json" }
+            });
+            if (!res.ok) throw new Error("network");
+            const j = await res.json();
+
+            if (showBubble) {
+              showChat(`ยอดคงเหลือ ${j.total_balance}฿ — ${j.advice}`, 5000);
+            }
+
+            // เก็บค่าไว้ให้ debug / หน้าอื่นๆ เผื่อใช้
+            window._pet_finance = j;
+            return j;   // j.status ตอนนี้คือ happy / neutral / danger
+          } catch (e) {
+            console.warn("fetchFinanceStatus error", e);
+            return null;
+          }
+        }
+
+
+        // poll background (ถ้าอยากปิดก็ลบสองบรรทัดนี้ได้)
+        fetchFinanceStatus(false);
+        setInterval(() => fetchFinanceStatus(false), POLL_INTERVAL_MS);
+
+        /* ---------- drag / pick state ---------- */
+        let dragging = false, isCarried = false;
+        let downAt = 0, offset = { x: 0, y: 0 };
+        let longPressTimer = null, longPressFired = false;
+        let lastPointer = { x: 0, y: 0 };
+
+        function startCarry() {
+          isCarried = true;
+          petEl.src = pickedSrc;
+        }
+        function endCarry() {
+          if (!isCarried) return;
+          isCarried = false;
+          petEl.src = idleSrc;
+          savePos();
+        }
+
+        function startLongPress() {
+          clearLongPress();
+          longPressFired = false;
+          longPressTimer = setTimeout(() => {
+            longPressFired = true;
+            startCarry();
+          }, LONGPRESS_MS);
+        }
+        function clearLongPress() {
+          if (longPressTimer) {
+            clearTimeout(longPressTimer);
+            longPressTimer = null;
+          }
+        }
+
+        /* ---------- pointer handlers ---------- */
+        petEl.addEventListener("pointerdown", e => {
+          e.preventDefault();
+          try { petEl.setPointerCapture(e.pointerId); } catch {}
+
+          downAt = performance.now();
+          const r = petEl.getBoundingClientRect();
+          offset.x = e.clientX - r.left;
+          offset.y = e.clientY - r.top;
+          lastPointer.x = e.clientX;
+          lastPointer.y = e.clientY;
+
+          startLongPress();
+        });
+
+        petEl.addEventListener('pointermove', e=>{
+          if(!downAt) return;
+          const dx = Math.abs(e.clientX - lastPointer.x);
+          const dy = Math.abs(e.clientY - lastPointer.y);
+
+          // ถ้าเริ่ม “ลาก” แล้ว
+          if(dx > MOVE_THRESHOLD || dy > MOVE_THRESHOLD){
+            clearLongPress();
+
+            const w = petEl.clientWidth, h = petEl.clientHeight;
+            let left = e.clientX - offset.x;
+            let top  = e.clientY - offset.y;
+            left = clamp(left, EDGE_MARGIN, Math.max(EDGE_MARGIN, window.innerWidth - w - EDGE_MARGIN));
+            top  = clamp(top,  EDGE_MARGIN, Math.max(EDGE_MARGIN, window.innerHeight - h - EDGE_MARGIN));
+            petEl.style.left = left+'px';
+            petEl.style.top  = top+'px';
+            petEl.style.bottom='auto';
+
+            if(!dragging){
+              dragging = true;
+              petEl.src = pickedSrc;      // เริ่มลากครั้งแรก -> ใช้รูป picked
+              petEl.style.cursor = 'grabbing';
+            }
+            return;
+          }
+
+          // ถ้าไม่ได้ลาก แต่อยู่ในโหมด long-press หิ้วตัวละคร
+          if(longPressFired){
+            const w = petEl.clientWidth, h = petEl.clientHeight;
+            let left = e.clientX - w/2;
+            let top  = e.clientY - h/2;
+            left = clamp(left, EDGE_MARGIN, Math.max(EDGE_MARGIN, window.innerWidth - w - EDGE_MARGIN));
+            top  = clamp(top, EDGE_MARGIN, Math.max(EDGE_MARGIN, window.innerHeight - h - EDGE_MARGIN));
+            petEl.style.left = left+'px';
+            petEl.style.top  = top+'px';
+            petEl.style.bottom='auto';
+          }
+        });
+
+        petEl.addEventListener("pointerup", async e => {
+          try { petEl.releasePointerCapture(e.pointerId); } catch {}
+          clearLongPress();
+
+          // ----- long press = pickup mode -----
+          if (longPressFired) {
+            longPressFired = false;
+            endCarry();
+            savePos();
+            applyGravity();
+            downAt = 0;
+            return;
+          }
+
+          // ----- dragging = ปล่อยหลังลาก -----
+          if (dragging) {
+            dragging = false;
+            petEl.style.cursor = "grab";
+            savePos();
+            applyGravity();
+            downAt = 0;
+            return;
+          }
+
+          // ---------- quick tap behaviour ----------
+          const path = (window.location.pathname || "").toLowerCase();
+
+          const isTransactionPage =
+            path.includes("transaction");  // income / expense / transfer
+          const isAccountsPage =
+            path.includes("account") || path.includes("accounts_management");
+          const isSettingsPage =
+            path.includes("settings");
+          const isStats =
+            path.includes("stats");
+          const isDashboard =
+            path.includes("dashboard");
+
+          // ---------- MODE 1: หน้าแนะนำการใช้งาน (transaction + accounts + settings) ----------
+            if (isTransactionPage || isAccountsPage || isSettingsPage || isDashboard || isStats) {
+            // ถ้ามี teachingSrc ก็ใช้ ไม่งั้น fallback เป็น idle
+            if (typeof teachingSrc !== "undefined" && teachingSrc) {
+              petEl.src = teachingSrc;
+            } else {
+              petEl.src = idleSrc;
+            }
+
+            let lines;
+
+            if (isTransactionPage) {
+              // --- หน้ากลุ่ม Transaction ---
+              if (path.includes("income")) {
+                // รายรับ
+                lines = [
+                  "หน้านี้ใช้บันทึกรายรับนะ ลองใส่จำนวนเงิน แล้วเลือกบัญชีปลายทางดูได้เลย~",
+                  "อย่าลืมเลือกหมวดหมู่ของรายรับ จะได้ดูสถิติทีหลังได้ง่าย ๆ นะ!"
+                ];
+              } else if (path.includes("expense")) {
+                // รายจ่าย
+                lines = [
+                  "หน้านี้สำหรับบันทึกรายจ่าย 🧾\nเลือกวันที่ เลือกหมวด แล้วกรอกจำนวนให้เรียบร้อยน้า~",
+                  "ถ้าอยากคุมรายจ่ายดี ๆ ลองแยกหมวดให้ละเอียดขึ้นนะ จะได้เห็นว่าเงินหายไปตรงไหนเยอะสุด!"
+                ];
+              } else if (path.includes("transfer")) {
+                // โอน
+                lines = [
+                  "หน้านี้ใช้โอนเงินระหว่างบัญชี เช่น จาก Cash ไป Bank 🏦",
+                  "เลือกบัญชีต้นทาง–ปลายทางให้ถูก แล้วใส่จำนวนเงินให้ครบ จากนั้นก็กดบันทึกได้เลย~"
+                ];
+              } else {
+                // เผื่อมีหน้า transaction อื่น ๆ
+                lines = [
+                  "นี่คือหน้าจัดการธุรกรรมนะ ลองดูปุ่มและฟอร์มด้านบนได้เลย~",
+                  "ถ้ามีอะไรงง ลองอ่านหัวข้อข้างๆ ช่องกรอกข้อมูล แต่ละอันจะบอกว่าใช้ทำอะไรอยู่ค่ะ!"
+                ];
+              }
+
+            } else if (isAccountsPage) {
+              // --- หน้า accounts_management ---
+              lines = [
+                "หน้านี้ไว้จัดการบัญชีเงินของนาย 💳\nดูบัญชีที่มีอยู่ และเพิ่มบัญชีใหม่ได้จากตรงนี้เลย!",
+                "ถ้าอยากสร้างบัญชีใหม่ เช่น Bank หรือ Wallet ให้ใส่ชื่อบัญชีกับยอดตั้งต้น แล้วกดสร้างได้เลยนะ~",
+              ];
+
+            } else if (isSettingsPage) {
+              // --- หน้า settings ---
+              lines = [
+                "หน้านี้คือหน้า Settings ⚙️\nเปลี่ยนรูปโปรไฟล์, Username, Email หรือรหัสผ่านได้จากตรงนี้เลย!",
+                "ถ้าอยากออกจากระบบ (Logout) หรือจะลบบัญชีทิ้งทั้งหมด ก็ทำได้จากหน้านี้นะ แต่ระวังหน่อยล่ะ 💥",
+              ];
+            } else if (isStats) {
+              // --- หน้า settings ---
+              lines = [
+                "หน้านี้คือหน้า Stats 📊\nใช้ดูสรุปภาพรวมทางการเงินของนายในแต่ละช่วงเวลา",
+                "สามารถดูรายรับ รายจ่าย เปรียบเทียบ และสถิติต่าง ๆ ได้ เพื่อช่วยวางแผนการเงินให้ดีขึ้นนะ ✨",
+              ];
+            } else if (isDashboard) {
+              // --- หน้า settings ---
+              lines = [
+                "หน้านี้คือหน้า Dashboard 🏠\nเป็นหน้าหลักที่รวมข้อมูลสำคัญของนายไว้ทั้งหมด",
+                "ดูยอดเงินคงเหลือ รายรับ รายจ่ายล่าสุด และภาพรวมการเงินได้ในหน้าเดียวเลย 😊",
+              ];
+            }else {
+              // กันพังเฉย ๆ (ปกติจะไม่เข้าเคสนี้เพราะเราตรวจด้านบนแล้ว)
+              lines = [
+                "หน้านี้มีอะไรให้ปรับหลายอย่างเลย ลองดูเมนู/ปุ่มต่าง ๆ ด้านในได้เลย~"
+              ];
+            }
+
+            const line = randomFrom(lines);
+            if (line) showChat(line, 5500);   // ให้อยู่บนจอนานหน่อย
+
+            // กลับไป idle หลังพูดจบ
+            setTimeout(() => {
+              if (!isCarried) petEl.src = idleSrc;
+            }, 4000);
+
+          } else {
+          // ---------- MODE 2: หน้าอื่น ๆ = โหมดดูสถานะการเงิน ----------
+          const j = await fetchFinanceStatus(true); // bubble summary ด้วย
+
+          if (j && j.status) {
+            const sprite = moodToSprite(j.status);
+            petEl.src = sprite;
+
+            const line = randomFrom(moodLines[j.status] || []);
+            if (line) showChat(line, 3500);
+
+            setTimeout(() => {
+              if (!isCarried) petEl.src = idleSrc;
+            }, 3500);
+          } else {
+            // ถ้า API พัง ใช้ข้อความ fallback ปกติ
+            const fallback = await (async () => {
+              try {
+                const res = await fetch("{% url 'pet_chat_api' %}", {
+                  headers: { Accept: "application/json" }
+                });
+                if (!res.ok) throw 0;
+                const j2 = await res.json();
+                return j2.text;
+              } catch {
+                return randomFrom(["ฮัลโหล~", "พักสายตาหน่อยนะ", "กลับมาแล้วจ้า"]);
+              }
+            })();
+            showChat(fallback, 3000);
+            }
+          }
+
+          downAt = 0;
+        });
+
+        petEl.addEventListener("dblclick", () => {
+          // no-op เพื่อไม่ให้ติด double-click แปลก ๆ
+        });
+
+        /* ---------- bubble follow ---------- */
+        function updateBubble() {
+          if (!talkEl || talkEl.style.display === "none") return;
+          const talkW = 260;
+          const r = petEl.getBoundingClientRect();
+          const bubbleH = talkEl.offsetHeight || 40;
+
+          let top  = r.top - bubbleH - 12;
+          let left = r.left + (r.width / 2) - (talkW / 2);
+
+          left = clamp(left, 8, Math.max(8, window.innerWidth - talkW - 8));
+          if (top < 8) top = r.bottom + 12;
+
+          talkEl.style.left = Math.round(left) + "px";
+          talkEl.style.top  = Math.round(top) + "px";
+          talkEl.style.bottom = "auto";
+        }
+        (function rafLoop() {
+          function loop() {
+            updateBubble();
+            requestAnimationFrame(loop);
+          }
+          requestAnimationFrame(loop);
+        })();
+
+        function ensureVisible() {
+          try {
+            const r = petEl.getBoundingClientRect();
+            const w = petEl.clientWidth, h = petEl.clientHeight;
+            let left = r.left, top = r.top;
+            const maxLeft = Math.max(EDGE_MARGIN, window.innerWidth - w - EDGE_MARGIN);
+            const maxTop  = Math.max(EDGE_MARGIN, window.innerHeight - h - EDGE_MARGIN);
+            let changed = false;
+
+            if (left < EDGE_MARGIN) { left = EDGE_MARGIN; changed = true; }
+            if (top  < EDGE_MARGIN) { top  = EDGE_MARGIN; changed = true; }
+            if (left > maxLeft)     { left = maxLeft;     changed = true; }
+            if (top  > maxTop)      { top  = maxTop;      changed = true; }
+
+            if (changed) {
+              petEl.style.left = Math.round(left) + "px";
+              petEl.style.top  = Math.round(top) + "px";
+              petEl.style.bottom = "auto";
+              savePos();
+            }
+          } catch (e) {}
+        }
+        window.addEventListener("resize",            () => setTimeout(ensureVisible, 60));
+        window.addEventListener("orientationchange", () => setTimeout(ensureVisible, 60));
+
+        // debug hook
+        window._pet_debug = window._pet_debug || {};
+        Object.assign(window._pet_debug, { fetchFinanceStatus, ensureVisible, savePos });
+
+        /* ---------- greeting first time in tab ---------- */
+        if (isFreshSession) {
+          try {
+            await new Promise(r => setTimeout(r, 400));
+
+            // 👋 ใช้ waving ตอนทัก
+            petEl.src = wavingSrc;
+
+            const greetings = [
+              "ยินดีต้อนรับกลับมานะ! 🐾",
+              "คิดถึงจังเลยน้า~ 💛",
+              "วันนี้จัดการเงินกันดีๆ นะ!",
+              "พร้อมช่วยนายดูแลงบมั้ย~?",
+              "ถ้าง่วงพักได้นะ เราไม่ว่าหรอก 😴",
+              "หวังว่าวันนี้จะเป็นวันที่ดีนะ! ✨"
+            ];
+
+            const count = Math.floor(Math.random() * 2) + 2;
+            const pick  = greetings.sort(() => Math.random() - 0.5).slice(0, count);
+
+            for (let i = 0; i < pick.length; i++) {
+              showChat(pick[i], 3000);
+              await new Promise(r => setTimeout(r, 3500));
+            }
+
+            await fetchFinanceStatus(true);
+
+            // ✅ จำว่า user นี้ทักแล้ว
+            sessionStorage.setItem(SESSION_KEY, "1");
+
+            // 🔄 กลับสู่ idle / happy หลังทัก
+            setTimeout(() => {
+              if (!isCarried) petEl.src = idleSrc;
+            }, 300);
+
+          } catch (e) {}
+        }
+
+      })();
+      </script>
+    {% endif %}
+    {# ---------------- end Desktop Pet ---------------- #}
+
+  </body>
+</html>

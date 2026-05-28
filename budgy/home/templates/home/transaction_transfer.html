@@ -1,0 +1,205 @@
+{% extends "home/layout.html" %}
+{% block title %}
+    Home
+{% endblock title %}
+{% block body %}
+    <script>
+        // function for fill today date as initial in date field
+        window.onload = function() {
+            const dateInput = document.getElementById('date_input');
+            const today = new Date();
+            const year = today.getFullYear();
+            const month = (today.getMonth() + 1).toString().padStart(2, '0'); // เดือนจะเริ่มจาก 0
+            const day = today.getDate().toString().padStart(2, '0');
+
+            // determine value for input[type="date"]
+            dateInput.value = `${year}-${month}-${day}`;
+        };
+
+        // Function for choose category into the field from side bar
+        document.addEventListener('DOMContentLoaded', function() {
+            // choose category
+            const categoryItems = document.querySelectorAll('.category-item');
+            
+            // input field for category
+            const categoryInput = document.getElementById('category_input');
+            
+            // take category to field
+            categoryItems.forEach(item => {
+                item.addEventListener('click', function() {
+                    const categoryName = item.firstChild.textContent.trim();
+                    categoryInput.value = categoryName; // ตั้งค่า value ของช่อง input
+                });
+            });
+        });
+
+        // Function to toggle the visibility of the 'Add/Delete Category' 
+        function toggleEditMode() {
+            var addCategoryForm = document.getElementById('addCategoryForm');
+            var editButtons = document.querySelectorAll('.delete-button');
+
+            // Toggle visibility when 'Edit' is clicked
+            if (addCategoryForm.style.display === 'none') {
+                addCategoryForm.style.display = 'block';
+                // Make the delete buttons visible for each category
+                editButtons.forEach(function(button) {
+                    button.style.display = 'inline';
+                });
+            } else {
+                addCategoryForm.style.display = 'none';
+                // Hide the delete buttons when not in edit mode
+                editButtons.forEach(function(button) {
+                    button.style.display = 'none';
+                });
+            }
+        }
+    </script>
+    <div class="app-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="profile-icon"></div>
+            </div>
+            <nav class="sidebar-nav">
+                <ul>
+                    <li>
+                        <a href="{% url 'home' request.user.id %}">HOME</a>
+                    </li>
+                    <li>
+                        <a href="{% url 'dashboard' request.user.id %}">Dashboard</a>
+                    </li>
+                    <li class="active">
+                        <a href="{% url 'transaction_income' request.user.id %}">Transaction</a>
+                    </li>
+                    <li>
+                        <a href="{% url 'account_management' request.user.id %}">Accounts</a>
+                    </li>
+                    <li>
+                        <a href="{% url 'stats' request.user.id %}">Stats</a>
+                    </li>
+                    <li>
+                        <a href="{% url 'settings' request.user.id %}">Settings</a>
+                    </li>
+                </ul>
+            </nav>
+            <div class="sidebar-footer">
+                <div class="logout-icon"></div>
+            </div>
+        </aside>
+        <!-- Main Content -->
+        <main class="main-content">
+            <div class="transaction-form-container">
+                <div class="tabs">
+                    <a href="{% url 'transaction_income' request.user.id %}">
+                        <button class="tab-button">Income</button>
+                    </a>
+                    <a href="{% url 'transaction_expense' request.user.id %}">
+                        <button class="tab-button">Expense</button>
+                    </a>
+                    <a href="{% url 'transaction_transfer' request.user.id %}">
+                        <button class="tab-button active">Transfer</button>
+                    </a>
+                </div>
+                <form class="transaction-form"
+                      action="{% url 'transaction_transfer' user_id=request.user.id %}"
+                      method="post">
+                    <div class="form-group">
+                        <label for="date">Date</label>
+                        <input type="date" id="date_input" name="date" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="amount">Amount</label>
+                        <input type="text"
+                               name="amount"
+                               class="form-control"
+                               placeholder="Enter amount"
+                               required>
+                    </div>
+                    <div class="form-group">
+                        <label for="category">Category</label>
+                        <input type="text"
+                               id="category_input"
+                               name="category_name"
+                               class="form-control"
+                               placeholder="Enter category"
+                               required>
+                    </div>
+                    <div class="form-group">
+                        <label for="from_account">From</label>
+                        <input type="text"
+                               name="from_account"
+                               class="form-control"
+                               placeholder="Enter account"
+                               required>
+                    </div>
+                    <div class="form-group">
+                        <label for="to_account">To</label>
+                        <input type="text"
+                               name="to_account"
+                               class="form-control"
+                               placeholder="Enter account"
+                               required>
+                    </div>
+                    <div class="form-actions">
+                        <button type="submit" class="save-button">Save</button>
+                    </div>
+                </form>
+            </div>
+        </main>
+        <aside class="right-sidebar">
+            <div class="category-container">
+                <div class="category-header">
+                    <h3>Category</h3>
+                    <button class="edit-button" onclick="toggleEditMode()">
+                        <i class="fas fa-edit"></i> Edit
+                    </button>
+                </div>
+                <!-- List of Categories with Delete Option (Initially Visible) -->
+                <ul id="categoryList" class="category-list">
+                    {% for category in categories %}
+                        <li class="category-item">
+                            {{ category.category_name }}
+                            <!-- Delete Button (Initially Hidden) -->
+                            <form method="POST" style="display: inline;">
+                                <input type="hidden"
+                                       name="delete_category_name"
+                                       value="{{ category.category_name }}">
+                                <input type="hidden" name="trans_type" value="transfer">
+                                <button type="submit"
+                                        class="delete-button"
+                                        style="float: right;
+                                               display: none">delete</button>
+                            </form>
+                        </li>
+                    {% endfor %}
+                </ul>
+                <!-- Add New Category Form (Initially Hidden) -->
+                <div id="addCategoryForm" style="display: none; margin-top: 20px;">
+                    <form method="POST">
+                        <input type="text"
+                               id="newCategory"
+                               name="category_name"
+                               placeholder="Add category"
+                               required>
+                        <button type="submit">Add</button>
+                        <input type="hidden" name="trans_type" value="transfer">
+                    </form>
+                </div>
+            </div>
+        </aside>
+    </div>
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="footer-social">
+            <span>Contact Us</span>
+            <a href="#"><i class="fab fa-facebook-f"></i></a>
+            <a href="#"><i class="fab fa-line"></i></a>
+            <a href="#"><i class="fab fa-instagram"></i></a>
+            <a href="#"><i class="far fa-envelope"></i></a>
+        </div>
+        <div class="footer-links">
+            <a href="#">Term of Use</a>
+            <a href="#">Privacy Policy</a>
+        </div>
+    </footer>
+{% endblock body %}

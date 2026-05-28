@@ -1,0 +1,67 @@
+{% extends "authorized/layout.html" %}
+{% block body %}
+  <style>
+  .login-body {
+    max-width: 500px;
+  }
+  </style>
+  <div class="container mt-5 login-body">
+    <!-- กล่องข้อความต้อนรับ -->
+    <h1 class="alert alert-info text-center">BUDGY</h1>
+    <!-- แสดงข้อความจาก Django messages -->
+    {% if messages %}
+      {% for message in messages %}
+        <div class="alert {% if message.tags == 'error' %}alert-danger{% elif message.tags == 'success' %}alert-success{% else %}alert-warning{% endif %} text-center">
+          <strong>{{ message }}</strong>
+          {% if message.tags == 'error' %}
+            <br>
+            Please login again.
+          {% endif %}
+          {% if message.tags == 'success' %}
+            <br>
+            Please login.
+          {% endif %}
+        </div>
+      {% endfor %}
+    {% else %}
+      <div class="alert alert-secondary text-center">Please login.</div>
+    {% endif %}
+    <!-- Login Form -->
+     
+    <div class="card shadow-sm mt-4">
+      <div class="card-body">
+        <h4 class="card-title mb-3 text-center">Login</h4>
+        <form action="{% url 'login' %}" method="post">
+          {% csrf_token %}
+          <div class="form-group mb-3">
+            <input type="text"
+                   name="username"
+                   class="form-control"
+                   placeholder="Username"
+                   required>
+          </div>
+          <div class="form-group mb-3">
+            <input type="password"
+                   name="password"
+                   class="form-control"
+                   placeholder="Password"
+                   required>
+          </div>
+          <div style="margin-top: 10px;">
+            <a href="{% url 'forgot_password' %}">Forgot password?</a>
+          </div>
+          <br>
+          <button type="submit" class="btn btn-primary btn-block">Login</button>
+        </form>
+      </div>
+    </div>
+    
+    <!-- Register link -->
+    <div class="card mt-3 text-center">
+      <div class="card-body">
+        <p class="mb-2">Don't have an account?</p>
+        <a href="{% url 'register' %}" class="btn btn-outline-secondary">Register here</a>
+      </div>
+    </div>
+  </div>
+{% endblock body %}
