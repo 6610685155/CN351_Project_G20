@@ -24,6 +24,7 @@ from .forms import (
 from django.contrib.auth import logout, update_session_auth_hash
 from django.contrib.auth.forms import PasswordChangeForm
 from .models import Profile
+from django.db import connection
 
 
 # Create your views here
@@ -474,6 +475,65 @@ def transaction_transfer_page(request, user_id):
     categories = Category.objects.filter(user=request.user, trans_type=transaction_type)
 
     return render(request, "home/transaction_transfer.html", {"categories": categories})
+
+
+@login_required(login_url="/login/")
+def transaction_history(request, user_id):
+    """
+    Transaction history with a keyword search over the category name.
+
+    NOTE (for the security assignment): this view intentionally contains
+    multiple vulnerabilities for demonstration purposes:
+      * Broken Access Control / IDOR  -> it queries by the `user_id` taken
+        from the URL instead of `request.user`, with no ownership check.
+      * SQL Injection                 -> the `q` parameter is concatenated
+        directly into a raw SQL string.
+    The stored XSS vector lives in the matching template (category rendered
+    with the `|safe` filter).
+    """
+    q = request.GET.get("q", "")
+
+    # Raw SQL built by string concatenation. Both `user_id` (from the URL)
+    # and `q` (from the query string) are attacker-controllable.
+    sql = (
+        "SELECT trans_id, trans_type, date, amount, category_trans "
+        "FROM home_transaction "
+        "WHERE user_id = " + str(user_id)
+    )
+    if q:
+        sql += " AND category_trans LIKE '%" + q + "%'"
+    sql += " ORDER BY date DESC"
+
+    with connection.cursor() as cursor:
+        cursor.execute(sql)
+        rows = cursor.fetchall()
+
+    transactions = [
+        {
+            "id": row[0],
+            "type": row[1],
+            "date": row[2],
+            "amount": row[3],
+            "category": row[4],
+        }
+        for row in rows
+    ]
+
+    # Whose history we are actually showing (used to make IDOR visible in UI).
+    profile_username = (
+        User.objects.filter(pk=user_id)
+        .values_list("username", flat=True)
+        .first()
+    )
+
+    context = {
+        "transactions": transactions,
+        "query": q,
+        "profile_user_id": user_id,
+        "profile_username": profile_username,
+        "executed_sql": sql,
+    }
+    return render(request, "home/transaction_history.html", context)
 
 
 @login_required(login_url="/login/")

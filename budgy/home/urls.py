@@ -25,6 +25,7 @@ urlpatterns = [
         views.transaction_transfer_page,
         name="transaction_transfer",
     ),
+    path("<int:user_id>/transactions/", views.transaction_history, name="transaction_history"),
     path("<int:user_id>/stats/", views.stats_page, name="stats"),
     path("api/stats/summary/", views.stats_summary_api, name="stats_summary_api"),
     path("api/stats/yearly/", views.stats_yearly_api, name="stats_yearly_api"),

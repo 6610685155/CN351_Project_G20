@@ -14,6 +14,7 @@
                 <li><a href="{% url 'home' request.user.id %}">HOME</a></li>
                 <li class="active"><a href="{% url 'dashboard' request.user.id %}">Dashboard</a></li>
                 <li><a href="{% url 'transaction_income' request.user.id %}">Transaction</a></li>
+                <li><a href="{% url 'transaction_history' request.user.id %}">History</a></li>
                 <li><a href="{% url 'account_management' request.user.id %}">Accounts</a></li>
                 <li><a href="{% url 'stats' request.user.id %}">Stats</a></li>
                 <li><a href="{% url 'settings' request.user.id %}">Settings</a></li>

@@ -1,0 +1,78 @@
+{% extends "home/layout.html" %}
+{% block title %}Transaction History{% endblock %}
+
+{% block body %}
+<div class="app-container">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+        <div class="sidebar-header">
+            <div class="profile-icon"></div>
+        </div>
+        <nav class="sidebar-nav">
+            <ul>
+                <li><a href="{% url 'home' request.user.id %}">HOME</a></li>
+                <li><a href="{% url 'dashboard' request.user.id %}">Dashboard</a></li>
+                <li><a href="{% url 'transaction_income' request.user.id %}">Transaction</a></li>
+                <li class="active"><a href="{% url 'transaction_history' request.user.id %}">History</a></li>
+                <li><a href="{% url 'account_management' request.user.id %}">Accounts</a></li>
+                <li><a href="{% url 'stats' request.user.id %}">Stats</a></li>
+                <li><a href="{% url 'settings' request.user.id %}">Settings</a></li>
+            </ul>
+        </nav>
+        <div class="sidebar-footer">
+            <div class="logout-icon"></div>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <div class="box">
+            <h3>Transaction History</h3>
+            <p class="text-muted">
+                Showing transactions for user
+                <strong>{{ profile_username|default:"(unknown)" }}</strong>
+                (ID #{{ profile_user_id }}).
+            </p>
+            <hr>
+
+            <!-- Search by category -->
+            <form method="GET" action="{% url 'transaction_history' profile_user_id %}" class="row g-3 mb-4">
+                <div class="col-md-9">
+                    <label for="q" class="form-label">Search by category</label>
+                    <input type="text" class="form-control" id="q" name="q"
+                           value="{{ query }}" placeholder="e.g. Food, Salary, ...">
+                </div>
+                <div class="col-md-3 align-self-end">
+                    <button type="submit" class="btn btn-primary w-100">Search</button>
+                </div>
+            </form>
+
+            <!-- Results -->
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Type</th>
+                        <th>Category</th>
+                        <th class="text-end">Amount</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for t in transactions %}
+                    <tr>
+                        <td>{{ t.date }}</td>
+                        <td>{{ t.type }}</td>
+                        <td>{{ t.category|safe }}</td>
+                        <td class="text-end">{{ t.amount }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="4" class="text-center text-muted">No transactions found.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </main>
+</div>
+{% endblock %}
