@@ -145,3 +145,11 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 MAILERSEND_API_KEY = os.environ.get("MAILERSEND_API_KEY")
 DEFAULT_FROM_EMAIL = "budgy@krentiz.dev"
+
+# ── Local mock email server (for vul4 testing) ──
+# Set USE_LOCAL_SMTP=True to route emails to the mock SMTP server
+# Start it with: python mock_email_server.py
+USE_LOCAL_SMTP = os.environ.get("USE_LOCAL_SMTP", "True") == "True" and DEBUG
+EMAIL_HOST = "127.0.0.1"
+EMAIL_PORT = 1025
+EMAIL_USE_TLS = False
