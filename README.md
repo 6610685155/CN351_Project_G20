@@ -1,9 +1,9 @@
 # 🔴 Budgy Exploit Toolkit
 ## Members
-1.Athichart Penwong 6610685015\
-2.Krittin Dansai 6610685031\
-3.Natthasit Thitithammakun 6610685155\
-4.Supawich Boonpraseart 6610685346
+Athichart Penwong 6610685015\
+Krittin Dansai 6610685031\
+Natthasit Thitithammakun 6610685155\
+Supawich Boonpraseart 6610685346
 
 **Authorized security testing for CN351 course project.**
 
