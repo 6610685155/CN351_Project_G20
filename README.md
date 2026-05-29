@@ -1,3 +1,4 @@
+# CN351_Project_G20
 # Budgy - Manage Your Finances
 
 ## Members
@@ -31,7 +32,7 @@ pip install -r requirements.txt
 ```
 >If you don't have pip installed, please refer to the Python official website: https://packaging.python.org/en/latest/tutorials/installing-packages/
 
-3. สร้างฐานข้อมูล
+3. Crate Database
 ```
 cd budgy
 python manage.py makemigrations
