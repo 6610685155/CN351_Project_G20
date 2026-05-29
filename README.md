@@ -1,4 +1,4 @@
-# CN351_Project_G20
+# CN351_Project_G10
 # Budgy - Manage Your Finances
 
 ## Members
