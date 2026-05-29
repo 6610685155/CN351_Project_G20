@@ -14,13 +14,14 @@ BUDGY is a multi-user personal-finance / budget-tracking web application. Users 
 create money accounts, record **income / expense / transfer** transactions, organise them into
 categories, search their transaction history, and view dashboards and statistics.
 
-This report analyses three classes of exploitable vulnerability in the application:
+This report analyses four classes of exploitable vulnerability in the application:
 
 | # | Vulnerability | Where |
 |---|---------------|-------|
 | 1 | SQL Injection | `home/views.py → transaction_history()` |
 | 2 | Stored Cross-Site Scripting (XSS) | `transaction_history.html`, `dashboard.html`, `stats.html` |
 | 3 | Cross-Site Request Forgery (CSRF) | `settings.py`; `@csrf_exempt` views |
+| 4 | Host Header Injection | `authorized/views.py → forgot_password()`; `settings.py` |
 
 Each vulnerability is presented as Chapter 21 prescribes: **describe → locate → apply the
 methodology → exploit step by step.**
@@ -193,6 +194,69 @@ logged-in victim's browser perform actions on BUDGY without their knowledge.
 
 ---
 
+### 2.4 Host Header Injection
+
+**Description.** The `ALLOWED_HOSTS` setting is set to `["*"]` (accept any host) and the
+`forgot_password()` view uses `request.build_absolute_uri()` to construct the password-reset link.
+Because Django builds the absolute URI from the incoming `Host` header, an attacker who forges the
+`Host` header in a forgot-password request can cause the reset link to point to an attacker-controlled
+server. When the victim clicks the link in their email, the valid reset token is sent to the attacker.
+
+**Where it exists.**
+- `budgy/budgy/settings.py` line 29 — `ALLOWED_HOSTS = ["*"]` (no host validation).
+- `budgy/authorized/views.py`, `forgot_password()` lines 121–123:
+```python
+reset_link = request.build_absolute_uri(
+    reverse("reset_password", kwargs={"uidb64": uid, "token": token})
+)
+```
+
+**Methodology (Chapter 21 §7.1 Fuzz, §5.4 Test for Host Header Attacks).**
+- **§7.1.1** identifies the `Host` header as an input the server processes — in scope for
+  manipulation.
+- **§5.4.1** — submit a request with a forged `Host` header (e.g. `Host: evil.com`). If the server
+  returns `200 OK` instead of `400 Bad Request`, the host is not validated → vulnerable.
+- **§5.4.2** — check if any server-generated URLs (password-reset links, absolute URLs in emails)
+  incorporate the `Host` header. If they do, an attacker can poison those links to redirect the
+  victim to an attacker-controlled domain.
+
+**Step-by-step exploitation.**
+1. **Verify Host acceptance** — send a GET request with a forged Host:
+   ```bash
+   curl -H "Host: evil.com" http://127.0.0.1:8000/login/
+   ```
+   Returns HTTP 200 → `ALLOWED_HOSTS = ["*"]` confirmed, no host validation.
+
+2. **Send poisoned forgot-password request** — POST to `/forgot-password/` with the victim's email
+   and a forged `Host` header pointing to the attacker's capture server:
+   ```bash
+   curl -X POST http://127.0.0.1:8000/forgot-password/ \
+     -H "Host: 127.0.0.1:8002" \
+     --data-urlencode "email=alice@example.com"
+   ```
+   Budgy generates a reset link using `request.build_absolute_uri()`, which reads the forged Host.
+   The link in the email becomes:
+   ```
+   http://127.0.0.1:8002/reset/<uidb64>/<token>/
+   ```
+   instead of `http://127.0.0.1:8000/reset/<uidb64>/<token>/`.
+
+3. **Capture the token** — run a capture server on `127.0.0.1:8002`. When the victim clicks the
+   poisoned reset link, the valid token arrives at the attacker's server.
+
+4. **Replay the token** — the attacker submits the captured token to the real Budgy server:
+   ```bash
+   curl -X POST http://127.0.0.1:8000/reset/<uidb64>/<token>/ \
+     --data-urlencode "password=AttackerPassword123" \
+     --data-urlencode "confirm=AttackerPassword123"
+   ```
+   The victim's password is now changed → full account takeover.
+
+> This attack requires email delivery to be configured. The PoC demonstrates that the forged `Host`
+> header is accepted and the poisoned link is generated correctly.
+
+---
+
 ## 3. Mitigation Strategies
 
 ### 3.1 SQL Injection
@@ -236,3 +300,26 @@ each form, and send the `X-CSRFToken` header on `fetch()`/AJAX calls.
 **Best practices:** require an unpredictable, per-session CSRF token on all state-changing requests
 (§5.9.2); set `SameSite=Strict`/`Lax` and `Secure` on cookies as defence-in-depth; for the most
 sensitive actions (email/password change) re-authenticate or confirm out-of-band.
+
+### 3.4 Host Header Injection
+
+**Fix — restrict `ALLOWED_HOSTS` and never trust the `Host` header for link generation:**
+```python
+# settings.py — only allow the actual domain(s)
+ALLOWED_HOSTS = ["127.0.0.1", "localhost", "budgy.example.com"]
+```
+For password-reset links, build the URL from a configured `SITE_URL` setting rather than
+`request.build_absolute_uri()`:
+```python
+# settings.py
+SITE_URL = "https://budgy.example.com"
+
+# views.py
+from django.conf import settings
+reset_link = settings.SITE_URL + reverse("reset_password",
+    kwargs={"uidb64": uid, "token": token})
+```
+**Best practices:** set `ALLOWED_HOSTS` to a strict whitelist of production domains; never use
+`["*"]`; use Django's `django.contrib.sites` framework or a `SITE_URL` config for building absolute
+URLs; in a reverse-proxy setup, trust `X-Forwarded-Host` only from known proxies via
+`SECURE_PROXY_SSL_HEADER` and `USE_X_FORWARDED_HOST = False`.

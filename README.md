@@ -22,21 +22,73 @@ cd exploits && npm install
 ## Quick Start
 
 ```bash
-# Create victim & attacker test accounts
-npm run setup
+# Seed demo users (alice, bob, admin) with sample transactions
+cd budgy
+python manage.py shell -c "exec(open('seed_demo.py').read())"
 
 # Then run any exploit:
-npm run vul1    # CSRF Email Takeover
+npm run vul1    # SQL Injection (Credential Dump)
 npm run vul2    # Stored XSS Data Theft
-npm run vul3    # Host Header Injection
-npm run vul4    # Full Chain Attack (all combined)
+npm run vul3    # CSRF Email Takeover
+npm run vul4    # Host Header Injection
 ```
 
 ---
 
 ## Exploits
 
-### `npm run vul1` — CSRF Email Takeover
+### `npm run vul1` — SQL Injection (§2.1)
+
+| | |
+|---|---|
+| **Vulnerability** | CWE-89 — SQL Injection |
+| **Server** | `http://127.0.0.1:8003` (auto-runs attack + dashboard) |
+| **Impact** | Full database read — all credentials, emails, tables dumped |
+
+**How it works:**
+1. The `transaction_history()` view concatenates the `q` parameter directly into raw SQL
+2. The exploit sends payloads through `/<id>/transactions/?q=<payload>`
+3. Six phases execute automatically:
+
+| Phase | Payload | Result |
+|---|---|---|
+| Detection | `?q='` | HTTP 500 OperationalError |
+| Boolean bypass | `?q=%' OR '1'='1' --` | All users' transactions returned |
+| Credential dump | `UNION SELECT ... FROM auth_user` | Usernames + PBKDF2 hashes |
+| Table enumeration | `UNION SELECT ... FROM sqlite_master` | All database tables listed |
+| Email dump | `UNION SELECT ... email FROM auth_user` | All user emails |
+| IDOR | Access `/<other_id>/transactions/` | Other users' data without authz |
+
+**Demo steps:**
+1. Make sure Budgy is running with seeded data
+2. Run `npm run vul1` — attack auto-executes and results print to terminal
+3. View dashboard at `http://127.0.0.1:8003`
+
+---
+
+### `npm run vul2` — Stored XSS → Data Theft (§2.2)
+
+| | |
+|---|---|
+| **Vulnerability** | CWE-79 (Stored XSS) + CWE-352 (CSRF) |
+| **Servers** | `http://127.0.0.1:8001` (inject) + `http://127.0.0.1:9001` (receive) |
+| **Impact** | Complete financial data exfiltration |
+
+**How it works:**
+1. Victim visits the "Feature Survey" phishing page → CSRF creates a malicious account in their profile (the account name IS an XSS payload: `<img src=x onerror="...">`)
+2. Next time victim opens Dashboard → `innerHTML` renders the payload → script loads from attacker's server
+3. Script fetches all APIs (accounts, spending, stats) and scrapes the settings page
+4. Everything is sent to the attacker's real-time dashboard
+
+**Demo steps:**
+1. Log in as `victim` in browser
+2. Open `http://127.0.0.1:8001` → survey page (XSS injected)
+3. Open Dashboard → XSS fires
+4. View stolen data at `http://127.0.0.1:9001/` (attacker dashboard)
+
+---
+
+### `npm run vul3` — CSRF Email Takeover (§2.3)
 
 | | |
 |---|---|
@@ -56,29 +108,7 @@ npm run vul4    # Full Chain Attack (all combined)
 
 ---
 
-### `npm run vul2` — Stored XSS → Data Theft
-
-| | |
-|---|---|
-| **Vulnerability** | CWE-79 (Stored XSS) + CWE-352 (CSRF) |
-| **Servers** | `http://127.0.0.1:8001` (inject) + `http://127.0.0.1:9001` (receive) |
-| **Impact** | Complete financial data exfiltration |
-
-**How it works:**
-1. Victim visits the "Feature Survey" phishing page → CSRF creates a malicious account in their profile (the account name IS an XSS payload)
-2. Next time victim opens Dashboard → `innerHTML` renders the payload → script loads from attacker's server
-3. Script fetches all APIs (accounts, spending, stats) and scrapes the settings page
-4. Everything is sent to the attacker's real-time dashboard
-
-**Demo steps:**
-1. Log in as `victim` in browser
-2. Open `http://127.0.0.1:8001` → survey page (XSS injected)
-3. Open Dashboard → XSS fires
-4. View stolen data at `http://127.0.0.1:9001/` (attacker dashboard)
-
----
-
-### `npm run vul3` — Host Header Injection
+### `npm run vul4` — Host Header Injection (§2.4)
 
 | | |
 |---|---|
@@ -94,35 +124,11 @@ npm run vul4    # Full Chain Attack (all combined)
 5. Attacker replays the token on the real Budgy server
 
 **Demo steps:**
-1. Start the capture server: `npm run vul3`
-2. In another terminal: `python vul3-poison.py`
+1. Start the capture server: `npm run vul4`
+2. In another terminal: `python vul4-poison.py`
 3. Check the dashboard at `http://127.0.0.1:8002/`
 
 > **Note:** Email delivery requires MailerSend API key. The PoC demonstrates that the forged Host is accepted and shows what the poisoned link looks like.
-
----
-
-### `npm run vul4` — Full Chain Attack ☠️
-
-| | |
-|---|---|
-| **Vulnerability** | CWE-352 + CWE-79 (chained) |
-| **Servers** | `http://127.0.0.1:8001` (inject) + `http://127.0.0.1:9001` (receive) |
-| **Impact** | **TOTAL ACCOUNT COMPROMISE** |
-
-**How it works — three phases execute simultaneously:**
-
-| Phase | Action | Effect |
-|---|---|---|
-| 📧 Email Takeover | XSS POSTs to `/settings/` | Email changed to `chain-attacker@evil.com` |
-| 💸 Money Drain | XSS POSTs to `/transaction/expense/` | ฿999,999 expense from Cash |
-| 🗃️ Data Theft | XSS fetches all APIs | Accounts, transactions, stats stolen |
-
-**Demo steps:**
-1. Log in as `victim` in browser
-2. Open `http://127.0.0.1:8001` → "Security Update" page
-3. Open Dashboard → all three phases execute
-4. View results at `http://127.0.0.1:9001/` (chain attack dashboard)
 
 ---
 
@@ -148,9 +154,11 @@ npm run vul4    # Full Chain Attack (all combined)
 
 | Root Cause | File | Line |
 |---|---|---|
-| CSRF middleware disabled | `budgy/settings.py` | 50 |
-| `@csrf_exempt` on views | `home/views.py` | 156, 194, 283, 367 |
+| Raw SQL concatenation | `home/views.py` | 498–504 |
+| `{{ t.category\|safe }}` | `transaction_history.html` | 65 |
 | `innerHTML` with user data | `dashboard.html` | 142, 175 |
 | `innerHTML` with user data | `stats.html` | 222 |
+| CSRF middleware disabled | `budgy/settings.py` | 50 |
+| `@csrf_exempt` on views | `home/views.py` | 157, 195, 284, 368 |
 | `ALLOWED_HOSTS = ["*"]` | `budgy/settings.py` | 29 |
 | `build_absolute_uri()` | `authorized/views.py` | 121 |
