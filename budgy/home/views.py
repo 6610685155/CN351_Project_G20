@@ -796,18 +796,19 @@ def update_account_api(request, account_id):
 @login_required(login_url="/login/")
 def delete_account_view(request, user_id, account_id):
     user = request.user
-    account = Account.objects.get(pk=account_id)
+    account = get_object_or_404(Account, pk=account_id, user=user)
 
-    if account.account_name == "Cash":
-        messages.error(request, "The 'Cash' account cannot be deleted.")
-    elif account.balance != 0:
-        messages.error(
-            request,
-            f"Cannot delete '{account.account_name}' because it still has a balance. Please transfer the funds first.",
-        )
-    else:
-        account.delete()
-        messages.success(request, "Account deleted successfully.")
+    if request.method == "POST":
+        if account.account_name == "Cash":
+            messages.error(request, "The 'Cash' account cannot be deleted.")
+        elif account.balance != 0:
+            messages.error(
+                request,
+                f"Cannot delete '{account.account_name}' because it still has a balance. Please transfer the funds first.",
+            )
+        else:
+            account.delete()
+            messages.success(request, "Account deleted successfully.")
 
     return redirect("account_management", user_id=user.id)
 
