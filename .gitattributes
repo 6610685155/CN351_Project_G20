@@ -1,0 +1,43 @@
+# Auto detect text files and perform LF normalization
+* text=auto
+
+# Source code
+*.py    text diff=python
+*.js    text
+*.html  text diff=html
+*.css   text diff=css
+*.md    text diff=markdown
+
+# Config / data
+*.json  text
+*.yml   text
+*.yaml  text
+*.toml  text
+*.cfg   text
+*.ini   text
+*.txt   text
+*.sh    text eol=lf
+
+# Django
+*.po    text
+*.pot   text
+
+# Binary / media
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.ico   binary
+*.svg   text
+
+# SQLite databases
+*.sqlite3 binary
+*.db      binary
+
+# Archives
+*.zip   binary
+*.gz    binary
+*.tar   binary
+
+# Lock files — exact
+package-lock.json text -diff
